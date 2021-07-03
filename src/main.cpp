@@ -42,14 +42,15 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
         if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
             // for diffuse objects collect light from all visible sources
             for (size_t i = 0; i < lights.size(); ++i) {
-                IntersectInfo isectShad;
+                IntersectInfo intrShadInfo;
                 Vec3f lightDir, lightIntensity;
-                lights[i]->illuminate(hitPoint, lightDir, lightIntensity, isectShad.tNear);
-                bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, isectShad, RayType::ShadowRay);
-                if (!vis && lights[i]->type == LightType::PointLight && isectShad.tNear >= (hitPoint - ((PointLight*)lights[i].get())->pos).length())
+                lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
+                bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, intrShadInfo, RayType::ShadowRay);
+                if (!vis && lights[i]->type == LightType::PointLight && intrShadInfo.tNear >= (hitPoint - ((PointLight*)lights[i].get())->pos).length())
                     vis = true;
                 if (vis) {
-                    hitColor += (intrInfo.hitObject->color * lightIntensity) * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
+                    float pattern = options.getPattern(hitTexCoordinates);
+                    hitColor += (intrInfo.hitObject->color * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
                 }
             }
         }

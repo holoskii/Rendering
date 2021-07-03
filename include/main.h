@@ -17,16 +17,36 @@
 class Options 
 {
 public:
-    int width = 800;
-    int height = 600;
+    int width = 800, height = 600;
     float fov = 90;
-    float zNear = 0.1;
-    float zFar = 100;
+    float zNear = 0.1, zFar = 100;
     int maxDepth = 3;
     float bias = 0.0001;
-    Vec3f backgroundColor{ 0.2, 0.2, 0.2 };
     std::string imagePath = "D:\\dev\\RayTracing";
     std::string imageName = "out.ppm";
+    Vec3f backgroundColor{ 0.2, 0.2, 0.2 };
+
     Options() {}
+
+    float getPattern(Vec2f texture) const
+    {
+        auto modulo = [](const float& f)
+        {
+            return f - std::floor(f);
+        };
+
+        float scaleS = 10, scaleT = 10;
+        float angle = 45;
+        angle *= M_PI / 180.0;
+
+        float s = texture.x * cos(angle) - texture.y * sin(angle);
+        float t = texture.y * cos(angle) + texture.x * sin(angle);
+        
+        //float pattern = (cos(texture.y * 2 * M_PI * scaleT) * sin(texture.x * 2 * M_PI * scaleS) + 1) * 0.5; // shaded chechboard pattern
+        float pattern = (modulo(s * scaleS) < 0.5) ^ (modulo(t * scaleT) < 0.5); // chechboard pattern
+        //float pattern = (modulo(s * scaleS) < 0.5); // striped pattern
+
+        return pattern < 0.25 ? 0.25 : pattern;
+    }
 };
 

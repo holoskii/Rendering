@@ -48,10 +48,13 @@ public:
         return true;
     }
 
-    void getSurfaceData(const Vec3f& Phit, Vec3f& Nhit, Vec2f& tex) const 
+    void getSurfaceData(const Vec3f& hitPoint, Vec3f& hitNormal, Vec2f& tex) const
     {
-        Nhit = Phit - center;
-        Nhit.normalize();
+        hitNormal = hitPoint - center;
+        hitNormal.normalize();
+
+        tex.x = (1 + atan2(hitNormal.z, hitNormal.x) / M_PI) * 0.5;
+        tex.y = acosf(hitNormal.y) / M_PI;
     }
 
     float r;
@@ -77,9 +80,13 @@ public:
         return (t >= 0);
     }
 
-    void getSurfaceData(const Vec3f& Phit, Vec3f& Nhit, Vec2f& tex) const
+    void getSurfaceData(const Vec3f& hitPoint, Vec3f& hitNormal, Vec2f& tex) const
     {
-        Nhit = normal;
+        hitNormal = normal;
+
+        Vec3f dist = hitPoint - center;
+        tex.x = dist.x / 15;
+        tex.y = dist.z / 15;
     }
 
     Vec3f normal;
