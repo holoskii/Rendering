@@ -10,8 +10,8 @@ public:
     
     virtual ~Light() {}
     
-    virtual void illuminate(const Vec3f& P, Vec3f&, Vec3f&, float&) const = 0;
-
+    virtual void illuminate(const Vec3f& point, Vec3f&, Vec3f&, float&) const = 0;
+    
     Vec3f color;
     float intensity;
     LightType type = LightType::BaseLight;
@@ -33,7 +33,7 @@ public:
         dir.normalize();
     }
     
-    void illuminate(const Vec3f& P, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const 
+    void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const
     {
         lightDir = dir;
         lightIntensity = color * intensity;
@@ -52,11 +52,12 @@ public:
         type = LightType::PointLight;
     }
     
-    void illuminate(const Vec3f& P, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const 
+    void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const 
     {
-        lightDir = P - pos;
+        lightDir = point - pos;
         lightIntensity = color * std::min(1.0, intensity / (4 * M_PI * lightDir.length2() / 1000));
         lightDir.normalize();
+        distance = (point - pos).length();
     }
 
     Vec3f pos;

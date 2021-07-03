@@ -73,6 +73,9 @@ bool trace(const Vec3f& orig, const Vec3f& dir,
 {
     intrInfo.hitObject = nullptr;
     for (auto i = objects.begin(); i != objects.end(); i++) {
+        // transparent objects do not cast shadows
+        if (rayType == RayType::ShadowRay && (*i).get()->materialType == MaterialType::Transparent)
+            continue;
         float tNear = std::numeric_limits<float>::max();
         if ((*i).get()->intersect(orig, dir, tNear) && tNear < intrInfo.tNear) {
             intrInfo.hitObject = (*i).get();
@@ -103,12 +106,8 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
                 Vec3f lightDir, lightIntensity;
                 lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
                 bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, intrShadInfo, RayType::ShadowRay);
-                if (!vis && lights[i]->type == LightType::PointLight && intrShadInfo.tNear >= (hitPoint - ((PointLight*)lights[i].get())->pos).length())
-                    vis = true;
-                if (vis) {
-                    float pattern = options.getPattern(hitTexCoordinates);
-                    hitColor += (intrInfo.hitObject->color * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
-                }
+                float pattern = options.getPattern(hitTexCoordinates);
+                hitColor += (intrInfo.hitObject->color * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
             }
         }
         else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
@@ -133,6 +132,27 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
             Vec3f reflectionRayOrig = outside ? hitPoint + biasVec : hitPoint - biasVec;    // add bias
             Vec3f reflectionColor = castRay(reflectionRayOrig, reflectionDirection, objects, lights, options, depth + 1);
             hitColor += reflectionColor * kr;
+        }
+        else if (intrInfo.hitObject->materialType == MaterialType::Phong) {
+            Vec3f diffuseLight = 0, specularLight = 0;
+            for (uint32_t i = 0; i < lights.size(); ++i) {
+                Vec3f lightDir, lightIntensity;
+                IntersectInfo isectShad;
+                lights[i]->illuminate(hitPoint, lightDir, lightIntensity, isectShad.tNear);
+
+                bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, isectShad, RayType::ShadowRay);
+                // if (isectShad.tNear > lights[i])
+
+                // compute the diffuse component
+                diffuseLight += vis * intrInfo.hitObject->difuse * lightIntensity * std::max(0.f, hitNormal.dotProduct(-lightDir));
+
+                // compute the specular component
+                // what would be the ideal reflection direction for this light ray
+                Vec3f R = reflect(lightDir, hitNormal);
+                specularLight += vis * intrInfo.hitObject->specular * lightIntensity * std::pow(std::max(0.f, R.dotProduct(-dir)), intrInfo.hitObject->nSpecular); // * intrInfo.hitObject->kReflect)
+                    // + (intrInfo.hitObject->color * (1 - intrInfo.hitObject->kReflect));
+            }
+            hitColor = intrInfo.hitObject->color * intrInfo.hitObject->ambient + diffuseLight + specularLight;
         }
         return hitColor;
     }
@@ -184,20 +204,34 @@ int main()
     options.width = 800;
     options.height = 600;
     //options.width = 3840; options.height = 2160;
-    options.width = 1920; options.height = 1080;
-    options.fov = 60;
+    //options.width = 1920; options.height = 1080;
+    options.fov = 90;
 
     LightsVector lights;
+    ObjectVector objects;
+
+    /* Main 
     lights.push_back(std::unique_ptr<Light>(new DistantLight({ 0, -1, 0 },      { 1, 1, 1 },    0.2)));
     lights.push_back(std::unique_ptr<Light>(new PointLight  ({ -1, 1, -1.5 },   { 1, 1, 0 },    0.5)));
-
-    ObjectVector objects;
-    objects.emplace_back(std::unique_ptr<Object>(new Plane (Vec3f{ 0.0, -1.5, 0.0 }, Vec3f{ 0, 1, 0 }, Vec3f{ 1, 1, 1 })));
-
+    objects.emplace_back(std::unique_ptr<Object>(new Plane (Vec3f{ 0.0, -2.0, 0.0 }, Vec3f{ 0, 1, 0 }, Vec3f{ 1, 1, 1 })));
     objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ -2.0, 0.0, -4.0 }, 1.0, Vec3f{ 1, 0, 0 })));
     objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ -0.5, 2.0, -6.0 }, 0.5, Vec3f{ 0, 1, 0 })));
-    objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ 2.0,  0.5, -4.0 }, 1.5, Vec3f{ 1, 1, 1 }, MaterialType::Reflective)));
     objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ -0.5, 0.5, -2.0 }, 0.3, Vec3f{ 1, 1, 1 }, MaterialType::Transparent)));
+    objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ 2.0,  0.5, -4.0 }, 1.5, Vec3f{ 1, 1, 1 }, MaterialType::Reflective)));*/
+
+    /* Phong */
+    lights.push_back(std::unique_ptr<Light>(new DistantLight({ 0, -1, 0 },      { 1, 1, 1 },    0.2)));
+    lights.push_back(std::unique_ptr<Light>(new PointLight  ({ -1, 1, -1.5 },   { 1, 1, 1 },    0.5)));
+    objects.emplace_back(std::unique_ptr<Object>(new Plane (Vec3f{ 0.0, -2.0, 0.0 }, Vec3f{ 0, 1, 0 }, Vec3f{ 1, 1, 1 })));
+    Sphere* s1 = new Sphere(Vec3f{ -2.0, 0.0, -4.0 }, 1.0, Vec3f{ 1, 0, 0 }, MaterialType::Phong);
+    Sphere* s2 = new Sphere(Vec3f{ -0.5, 0.5, -2.0 }, 0.3, Vec3f{ 1, 1, 1 }, MaterialType::Transparent);
+    Sphere* s3 = new Sphere(Vec3f{ -0.5, 2.0, -6.0 }, 0.5, Vec3f{ 0, 1, 0 });
+    Sphere* s4 = new Sphere(Vec3f{ 2.0,  0.5, -4.0 }, 1.5, Vec3f{ 1, 1, 1 }, MaterialType::Reflective);
+    s1->ambient = 0.4; s1->difuse = 0.1; s1->specular = 0.7; s1->nSpecular = 10.0;
+    objects.emplace_back(std::unique_ptr<Object>(s1));
+    objects.emplace_back(std::unique_ptr<Object>(s2));
+    objects.emplace_back(std::unique_ptr<Object>(s3));
+    objects.emplace_back(std::unique_ptr<Object>(s4));
     
     render(options, objects, lights);
 }

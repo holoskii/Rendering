@@ -35,6 +35,8 @@ public:
             return f - std::floor(f);
         };
 
+        
+
         float scaleS = 10, scaleT = 10;
         float angle = 45;
         angle *= M_PI / 180.0;
@@ -42,10 +44,11 @@ public:
         float s = texture.x * cos(angle) - texture.y * sin(angle);
         float t = texture.y * cos(angle) + texture.x * sin(angle);
         
-        //float pattern = (cos(texture.y * 2 * M_PI * scaleT) * sin(texture.x * 2 * M_PI * scaleS) + 1) * 0.5; // shaded chechboard pattern
+        //float pattern = (cos(texture.y * 2 * M_PI * scaleT * t) * sin(texture.x * 2 * M_PI * scaleS * s) + 1) * 0.5; // shaded chechboard pattern
         float pattern = (modulo(s * scaleS) < 0.5) ^ (modulo(t * scaleT) < 0.5); // chechboard pattern
         //float pattern = (modulo(s * scaleS) < 0.5); // striped pattern
-
+        
+        //return 1.0f;
         return pattern < 0.25 ? 0.25 : pattern;
     }
 };

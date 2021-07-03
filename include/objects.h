@@ -8,7 +8,7 @@ class Sphere;
 #define M_PI	3.14159265358979323846
 #endif
 
-enum class MaterialType { Diffuse, Reflective, Transparent };
+enum class MaterialType { Diffuse, Reflective, Transparent, Phong };
 
 class Object
 {
@@ -22,7 +22,12 @@ public:
     Vec3f center;
     Vec3f color;
     MaterialType materialType;
-    float indexOfRefraction = 1.4;
+    float indexOfRefraction = 1.4;  // used for Reflective only
+    float ambient   = 0.1;          // used for Phong only
+    float difuse    = 0.1;          // used for Phong only
+    float specular  = 1.0;          // used for Phong only
+    float nSpecular = 5.0;          // used for Phong only
+    // float kReflect  = 1.0;
 };
 
 class Sphere : public Object
