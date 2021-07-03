@@ -10,6 +10,63 @@ struct IntersectInfo
     float tNear = std::numeric_limits<float>::max();
 };
 
+inline float clamp(const float low, const float high, const float val)
+{
+    return std::max(low, std::min(high, val));
+}
+
+Vec3f reflect(const Vec3f& dir, const Vec3f& normal)
+{
+    return dir - 2 * dir.dotProduct(normal) * normal;
+}
+
+Vec3f refract(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction)
+{
+    float n1 = 1, n2 = indexOfRefraction;   // n1 - air, n2 - object
+    float cosi = clamp(-1, 1, dir.dotProduct(normal));
+    Vec3f modNormal = normal;
+    if (cosi < 0) {
+        // outside the medium
+        cosi = -cosi;
+    }
+    else {
+        // inside the medium
+        std::swap(n1, n2);
+        modNormal = -normal;
+    }
+    float rri = n1 / n2; // relative refraction index
+    float k = 1 - rri * rri * (1 - cosi * cosi); // critial angle test
+    if (k < 0) 
+        return 0;
+    return rri * dir + (rri * cosi - sqrtf(k)) * modNormal;
+}
+
+float fresnel(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction)
+{
+    float n1 = 1, n2 = indexOfRefraction;   // n1 - air, n2 - object
+    float cosi = clamp(-1, 1, dir.dotProduct(normal));
+    if (cosi > 0) {
+        // outside the medium
+        std::swap(n1, n2);
+    }
+    float sint = n1 / n2 * sqrtf(std::max(0.f, 1 - cosi * cosi));  // Snell's law
+    
+    float kr;
+    if (sint >= 1) {
+        // total internal reflection
+        kr = 1;
+    }
+    else {
+        // fresnell equation
+        float cost = sqrtf(std::max(0.f, 1 - sint * sint));
+        cosi = fabsf(cosi);
+        float rs = ((n2 * cosi) - (n1 * cost)) / ((n2 * cosi) + (n1 * cost));
+        float rp = ((n1 * cosi) - (n2 * cost)) / ((n1 * cosi) + (n2 * cost));
+        kr = (rs * rs + rp * rp) / 2;
+    }
+    return kr;
+}
+
 bool trace(const Vec3f& orig, const Vec3f& dir,
     const std::vector<std::unique_ptr<Object>>& objects,
     IntersectInfo& intrInfo, const RayType rayType = RayType::PrimaryRay)
@@ -27,7 +84,7 @@ bool trace(const Vec3f& orig, const Vec3f& dir,
 }
 
 Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
-    ObjectVector& objects, LightsVector& lights,
+    const ObjectVector& objects, const LightsVector& lights,
     const Options& options, const int depth)
 {
     if (depth > options.maxDepth) return options.backgroundColor;
@@ -39,7 +96,7 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
         Vec3f hitPoint = orig + dir * intrInfo.tNear;
         intrInfo.hitObject->getSurfaceData(hitPoint, hitNormal, hitTexCoordinates);
 
-        if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
+        if      (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
             // for diffuse objects collect light from all visible sources
             for (size_t i = 0; i < lights.size(); ++i) {
                 IntersectInfo intrShadInfo;
@@ -58,8 +115,25 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
             // get info from reflected ray
             Vec3f reflectedRay = dir - 2 * dir.dotProduct(hitNormal) * hitNormal;
             hitColor = 0.95 * castRay(hitPoint + options.bias * hitNormal, reflectedRay, objects, lights, options, depth + 1);
-        } 
+        }
+        else if (intrInfo.hitObject->materialType == MaterialType::Transparent) {
+            float kr = fresnel(dir, hitNormal, intrInfo.hitObject->indexOfRefraction);
+            bool outside = dir.dotProduct(hitNormal) < 0;
+            Vec3f biasVec = options.bias * hitNormal;
+   
+            if (kr < 1) {
+                // compute refraction if it is not a case of total internal reflection
+                Vec3f refractionDirection = refract(dir, hitNormal, intrInfo.hitObject->indexOfRefraction).normalize();
+                Vec3f refractionRayOrig = outside ? hitPoint - biasVec : hitPoint + biasVec; // add bias
+                Vec3f refractionColor = castRay(refractionRayOrig, refractionDirection, objects, lights, options, depth + 1);
+                hitColor += refractionColor * (1 - kr);
+            }
 
+            Vec3f reflectionDirection = reflect(dir, hitNormal).normalize();
+            Vec3f reflectionRayOrig = outside ? hitPoint + biasVec : hitPoint - biasVec;    // add bias
+            Vec3f reflectionColor = castRay(reflectionRayOrig, reflectionDirection, objects, lights, options, depth + 1);
+            hitColor += reflectionColor * kr;
+        }
         return hitColor;
     }
     return options.backgroundColor;
@@ -109,21 +183,21 @@ int main()
     Options options;
     options.width = 800;
     options.height = 600;
-    // options.width = 3840; options.height = 2160;
-    // options.width = 1920; options.height = 1080;
+    //options.width = 3840; options.height = 2160;
+    options.width = 1920; options.height = 1080;
     options.fov = 60;
 
     LightsVector lights;
     lights.push_back(std::unique_ptr<Light>(new DistantLight({ 0, -1, 0 },      { 1, 1, 1 },    0.2)));
-    lights.push_back(std::unique_ptr<Light>(new PointLight  ({ -1, 1, -1.5 },   { 1, 1, 0 },  0.5)));
+    lights.push_back(std::unique_ptr<Light>(new PointLight  ({ -1, 1, -1.5 },   { 1, 1, 0 },    0.5)));
 
     ObjectVector objects;
-    objects.emplace_back(std::unique_ptr<Object>(new Plane(Vec3f{ 0.0, -1.5, 0.0 }, Vec3f{ 0, 1, 0 }, Vec3f{ 1, 1, 1 })));
+    objects.emplace_back(std::unique_ptr<Object>(new Plane (Vec3f{ 0.0, -1.5, 0.0 }, Vec3f{ 0, 1, 0 }, Vec3f{ 1, 1, 1 })));
 
     objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ -2.0, 0.0, -4.0 }, 1.0, Vec3f{ 1, 0, 0 })));
     objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ -0.5, 2.0, -6.0 }, 0.5, Vec3f{ 0, 1, 0 })));
     objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ 2.0,  0.5, -4.0 }, 1.5, Vec3f{ 1, 1, 1 }, MaterialType::Reflective)));
-    objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ -0.5, 0.5, -2.0 }, 0.3, Vec3f{ 1, 1, 1 })));
+    objects.emplace_back(std::unique_ptr<Object>(new Sphere(Vec3f{ -0.5, 0.5, -2.0 }, 0.3, Vec3f{ 1, 1, 1 }, MaterialType::Transparent)));
     
     render(options, objects, lights);
 }

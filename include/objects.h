@@ -8,7 +8,7 @@ class Sphere;
 #define M_PI	3.14159265358979323846
 #endif
 
-enum class MaterialType { Diffuse, Reflective };
+enum class MaterialType { Diffuse, Reflective, Transparent };
 
 class Object
 {
@@ -22,6 +22,7 @@ public:
     Vec3f center;
     Vec3f color;
     MaterialType materialType;
+    float indexOfRefraction = 1.4;
 };
 
 class Sphere : public Object

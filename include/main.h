@@ -20,7 +20,7 @@ public:
     int width = 800, height = 600;
     float fov = 90;
     float zNear = 0.1, zFar = 100;
-    int maxDepth = 3;
+    int maxDepth = 5;
     float bias = 0.0001;
     std::string imagePath = "D:\\dev\\RayTracing";
     std::string imageName = "out.ppm";
