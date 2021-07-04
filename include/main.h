@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <vector>
 #include <limits>
+#include <thread>
+#include <chrono>
 
 class Options 
 {
@@ -25,6 +27,7 @@ public:
     std::string imagePath = "D:\\dev\\RayTracing";
     std::string imageName = "out.ppm";
     Vec3f backgroundColor{ 0.2, 0.2, 0.2 };
+    int nWorkers = 8;
 
     Options() {}
 

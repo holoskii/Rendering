@@ -159,7 +159,7 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
     return options.backgroundColor;
 }
 
-int savePPM(Vec3f* frameBuffer, Options& options)
+int savePPM(Vec3f* frameBuffer, const Options& options)
 {
     auto clamp = [](const float& lo, const float& hi, const float& v)
     {
@@ -180,35 +180,63 @@ int savePPM(Vec3f* frameBuffer, Options& options)
     return 0;
 }
 
-void render(Options& options, ObjectVector& objects, LightsVector& lights)
+void renderWorker(const Options& options, const ObjectVector& objects, const LightsVector& lights,
+    Vec3f* frameBuffer, int y0, int y1)
 {
-    Vec3f* frameBuffer = new Vec3f[options.height * options.width];
-    Vec3f orig = { 0, 0, 0 };
+    const Vec3f orig = { 0, 0, 0 };
+    const float scale = tan(options.fov * 0.5 / 180.0 * M_PI);
     float imageAspectRatio = (options.width) / (float)options.height;
-    float scale = tan(options.fov * 0.5 / 180.0 * M_PI);
-    for (int x = 0; x < options.width; x++) {
-        for (int y = 0; y < options.height; y++) {
+
+    for (int y = y0; y < y1; y++) {
+        for (int x = 0; x < options.width; x++) {
             float xPix = (2 * (x + 0.5) / (float)options.width - 1) * scale * imageAspectRatio;
             float yPix = -(2 * (y + 0.5) / (float)options.height - 1) * scale;
             Vec3f dir = Vec3f(xPix, yPix, -1).normalize();
             frameBuffer[x + y * options.width] = castRay(orig, dir, objects, lights, options, 0);
         }
     }
-    savePPM(frameBuffer, options);
-    delete[] frameBuffer;
+}
+
+void render(const Options& options, const ObjectVector& objects, const LightsVector& lights, Vec3f* frameBuffer)
+{
+    auto start = std::chrono::high_resolution_clock::now();
+
+    std::vector<std::thread*> threadPool;
+    for (int i = 0; i < options.nWorkers; i++) {
+        int y0 = options.height / options.nWorkers * i;
+        int y1 = options.height / options.nWorkers * (i + 1);
+        if (i + 1 == options.nWorkers) y1 = options.height;
+        threadPool.push_back(new std::thread(renderWorker, std::cref(options), std::cref(objects), std::cref(lights), frameBuffer, y0, y1));
+    }
+
+    for (auto &t : threadPool)
+        t->join();
+
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    std::cout << "Render time with " << options.nWorkers << " workers: " << duration.count() / 1000.0 << "s" << std::endl;
 }
 
 int main()
 {
+    auto start = std::chrono::high_resolution_clock::now();
+    
     Options options;
     options.width = 800;
     options.height = 600;
     //options.width = 3840; options.height = 2160;
     //options.width = 1920; options.height = 1080;
-    options.fov = 90;
+    options.fov = 60;
+
+    options.nWorkers = 8;
+#ifdef _DEBUG 
+    options.nWorkers = 1;
+#endif // _DEBUG 
 
     LightsVector lights;
     ObjectVector objects;
+
+    std::cout << "Starting render " << options.width << "x" << options.height << std::endl;
 
     /* Main 
     lights.push_back(std::unique_ptr<Light>(new DistantLight({ 0, -1, 0 },      { 1, 1, 1 },    0.2)));
@@ -233,6 +261,12 @@ int main()
     objects.emplace_back(std::unique_ptr<Object>(s3));
     objects.emplace_back(std::unique_ptr<Object>(s4));
     
-    render(options, objects, lights);
-}
+    Vec3f* frameBuffer = new Vec3f[options.height * options.width];
+    render(options, objects, lights, frameBuffer);
+    savePPM(frameBuffer, options);
+    delete[] frameBuffer;
 
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    std::cout << "Total runtime: " << duration.count() / 1000.0 << "s" << std::endl;
+}
