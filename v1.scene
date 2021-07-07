@@ -1,24 +1,24 @@
 [options]
-width=1920
-height=1080
+width=16000
+height=9000
 fov=60
 n_workers=8
+max_depth=10
 image_name=v1.out.ppm
-pattern_type=chessboard
-#none, stripped, chessboard, shaded_chessboard
 
 [light]
 #name,type,dir1,dir2,dir3,color1,color2,color3,intensity
 #name,type,pos1,pos2,pos3,color1,color2,color3,intensity
 distant_name1,	distant_light,	0,-1,0,		1,1,1,		0.2
-point_name2,	point_light,	-1,1,-1.5,	1,1,0.75,	0.5
+point_name2,	point_light,	-1,1,-1.5,	1,1,0.25,	0.5
 
 [object]
-#name,type,pos1,pos2,pos3,r,color1,color2,color3,material_type,type_parameters
-plane_1,	plane,	0.0,-2.0,0.0,	0,1,0,	1,1,1
-sphere_1,	sphere,	-2.0,0.0,-4.0,	1.0,	1.0,0.0,0.0,phong,0.4,0.1,0.7,10.0
-sphere_2,	sphere,	-0.5,2.0,-6.0,	0.5,	0.0,1.0,0.0
-sphere_3,	sphere,	-0.5,0.5,-2.0,	0.3,	1.0,1.0,1.0,transparent
-sphere_4,	sphere,	2.0,0.5,-4.0,	1.5,	1.0,1.0,1.0,reflective
+#pattern=none, stripped, chessboard, shaded_chessboard
+#name,type,pos1,pos2,pos3,r,color1,color2,color3,pattern,material_type,type_parameters
+plane_1,	plane,	0.0,-2.0,0.0,	0,1,0,	1,1,1,			chessboard
+sphere_1,	sphere,	-2.0,0.0,-4.0,	1.0,	1.0,0.0,0.0,	none,	phong,0.4,0.1,0.7,10.0
+sphere_2,	sphere,	-0.5,2.0,-6.0,	0.5,	0.0,1.0,0.0,	none
+sphere_3,	sphere,	-0.5,0.5,-2.0,	0.3,	1.0,1.0,1.0,	none,	transparent
+sphere_4,	sphere,	2.0,0.5,-4.0,	1.5,	1.0,1.0,1.0,	none,	reflective
 
 [end]

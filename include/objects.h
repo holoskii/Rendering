@@ -9,6 +9,7 @@ class Sphere;
 #endif
 
 enum class MaterialType { Diffuse, Reflective, Transparent, Phong };
+enum class PatternType { None, Stripped, Chessboard, ShadedChessboard };
 
 class Object
 {
@@ -28,6 +29,40 @@ public:
     float specular  = 1.0;          // used for Phong only
     float nSpecular = 5.0;          // used for Phong only
     // float kReflect  = 1.0;
+
+    PatternType pattern = PatternType::None;
+
+    float getPattern(Vec2f texture) const
+    {
+        auto modulo = [](const float& f)
+        {
+            return f - std::floor(f);
+        };
+
+
+
+        float scaleS = 10, scaleT = 10;
+        float angle = 45;
+        angle *= M_PI / 180.0;
+
+        if (pattern == PatternType::None)
+            return 1.0f;
+
+
+        float s = texture.x * cos(angle) - texture.y * sin(angle);
+        float t = texture.y * cos(angle) + texture.x * sin(angle);
+
+        float res = 1.0f;
+
+        if (pattern == PatternType::Stripped)
+            res = (modulo(s * scaleS) < 0.5);
+        else if (pattern == PatternType::Chessboard)
+            res = (modulo(s * scaleS) < 0.5) ^ (modulo(t * scaleT) < 0.5);
+        else if (pattern == PatternType::ShadedChessboard)
+            res = (cos(texture.y * 2 * M_PI * scaleT * t) * sin(texture.x * 2 * M_PI * scaleS * s) + 1) * 0.5;
+
+        return res < 0.1 ? 0.1 : res;
+    }
 };
 
 class Sphere : public Object

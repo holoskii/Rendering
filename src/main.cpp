@@ -1,8 +1,5 @@
 #include "main.h"
 
-// #undef NDEBUG
-// #include <cassert>
-
 enum class RayType { PrimaryRay, ShadowRay };
 using ObjectVector = std::vector<std::unique_ptr<Object>>;
 using LightsVector = std::vector<std::unique_ptr<Light>>;
@@ -57,7 +54,7 @@ Vec3f refract(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefract
     }
     float rri = n1 / n2; // relative refraction index
     float k = 1 - rri * rri * (1 - cosi * cosi); // critial angle test
-    if (k < 0) 
+    if (k < 0)
         return 0;
     return rri * dir + (rri * cosi - sqrtf(k)) * modNormal;
 }
@@ -71,7 +68,7 @@ float fresnel(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefract
         std::swap(n1, n2);
     }
     float sint = n1 / n2 * sqrtf(std::max(0.f, 1 - cosi * cosi));  // Snell's law
-    
+
     float kr;
     if (sint >= 1) {
         // total internal reflection
@@ -120,14 +117,14 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
         Vec3f hitPoint = orig + dir * intrInfo.tNear;
         intrInfo.hitObject->getSurfaceData(hitPoint, hitNormal, hitTexCoordinates);
 
-        if      (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
+        if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
             // for diffuse objects collect light from all visible sources
             for (size_t i = 0; i < lights.size(); ++i) {
                 IntersectInfo intrShadInfo;
                 Vec3f lightDir, lightIntensity;
                 lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
                 bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, intrShadInfo, RayType::ShadowRay);
-                float pattern = options.getPattern(hitTexCoordinates);
+                float pattern = intrInfo.hitObject->getPattern(hitTexCoordinates);
                 hitColor += (intrInfo.hitObject->color * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
             }
         }
@@ -140,7 +137,7 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
             float kr = fresnel(dir, hitNormal, intrInfo.hitObject->indexOfRefraction);
             bool outside = dir.dotProduct(hitNormal) < 0;
             Vec3f biasVec = options.bias * hitNormal;
-   
+
             if (kr < 1) {
                 // compute refraction if it is not a case of total internal reflection
                 Vec3f refractionDirection = refract(dir, hitNormal, intrInfo.hitObject->indexOfRefraction).normalize();
@@ -174,6 +171,7 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
                     // + (intrInfo.hitObject->color * (1 - intrInfo.hitObject->kReflect));
             }
             hitColor = intrInfo.hitObject->color * intrInfo.hitObject->ambient + diffuseLight + specularLight;
+            hitColor = hitColor * intrInfo.hitObject->getPattern(hitTexCoordinates);
         }
         return hitColor;
     }
@@ -182,27 +180,31 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
 
 int savePPM(Vec3f* frameBuffer, const Options& options)
 {
-    auto clamp = [](const float& lo, const float& hi, const float& v)
-    {
-        return std::max(lo, std::min(hi, v));
-    };
-    std::string path = options.imagePath + "\\" + options.imageName;
-    std::ofstream of(path, std::ios::out | std::ios::binary);
-    of << "P6\n" << std::to_string(options.width) << " "
-        << std::to_string(options.height) << "\n" << std::to_string(255) << "\n";
+    Timer t("Save image");
+
+    // intermediate buffer significantly speeds up file write process
+    char* data = new char[options.height * options.width * 3];
+    char* dataPtr = data;
     for (int i = 0; i < options.height * options.width; i++)
         for (int j = 0; j < 3; j++)
-            of << static_cast<char>(clamp(0.05f, 1.0f, frameBuffer[i][j]) * 255);
+            *dataPtr++ = static_cast<char>(clamp(0.0f, 1.0f, frameBuffer[i][j]) * 255);
+
+    std::string path = options.imagePath + "\\" + options.imageName;
+    std::ofstream of(path, std::ios::out | std::ios::binary);
+    of << "P6\n" << std::to_string(options.width) << " " << std::to_string(options.height) << "\n" << std::to_string(255) << "\n";
+    of.write(data, options.height * options.width * 3);
     of.close();
+
     wchar_t* wPath = new wchar_t[strlen(path.c_str()) + 1];
     mbstowcs(wPath, path.c_str(), strlen(path.c_str()) + 1);
     ShellExecute(NULL, L"open", wPath, NULL, NULL, SW_SHOWDEFAULT);
     delete[] wPath;
+    delete[] data;
     return 0;
 }
 
-void renderWorker(const Options& options, const ObjectVector& objects, const LightsVector& lights,
-    Vec3f* frameBuffer, int y0, int y1)
+void renderWorker(const Options & options, const ObjectVector & objects, const LightsVector & lights,
+    Vec3f * frameBuffer, int y0, int y1)
 {
     const Vec3f orig = { 0, 0, 0 };
     const float scale = tan(options.fov * 0.5 / 180.0 * M_PI);
@@ -218,9 +220,9 @@ void renderWorker(const Options& options, const ObjectVector& objects, const Lig
     }
 }
 
-void render(const Options& options, const ObjectVector& objects, const LightsVector& lights, Vec3f* frameBuffer)
+void render(const Options & options, const ObjectVector & objects, const LightsVector & lights, Vec3f * frameBuffer)
 {
-    auto start = std::chrono::high_resolution_clock::now();
+    Timer t("Render");
 
     std::vector<std::thread*> threadPool;
     for (int i = 0; i < options.nWorkers; i++) {
@@ -230,16 +232,13 @@ void render(const Options& options, const ObjectVector& objects, const LightsVec
         threadPool.push_back(new std::thread(renderWorker, std::cref(options), std::cref(objects), std::cref(lights), frameBuffer, y0, y1));
     }
 
-    for (auto &t : threadPool)
+    for (auto& t : threadPool)
         t->join();
-
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-    std::cout << "Render time with " << options.nWorkers << " workers: " << duration.count() / 1000.0 << "s" << std::endl;
 }
 
-bool loadScene(const std::string& sceneName, ObjectVector& objects, LightsVector& lights, Options& options)
+bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVector & lights, Options & options)
 {
+    Timer t("Load scene");
     enum class BlockType { None, Options, Light, Object };
     std::map<std::string, BlockType> blockMap;
     blockMap["[options]"] = BlockType::Options;
@@ -249,7 +248,7 @@ bool loadScene(const std::string& sceneName, ObjectVector& objects, LightsVector
 
     std::string scenePath = options.imagePath + "\\" + sceneName;
     std::string str;
-    std::ifstream ifs (scenePath, std::ifstream::in);
+    std::ifstream ifs(scenePath, std::ifstream::in);
     std::getline(ifs, str);
 
     while (ifs.good()) {
@@ -273,25 +272,16 @@ bool loadScene(const std::string& sceneName, ObjectVector& objects, LightsVector
                             options.height = strToInt(str.substr(str.find('=') + 1));
                         else if (strv.find("fov") != std::string::npos)
                             options.fov = strToFloat(str.substr(str.find('=') + 1));
-                        else if (strv.find("n_workers") != std::string::npos)               
-                            #ifdef _DEBUG 
+                        else if (strv.find("n_workers") != std::string::npos)
+#ifdef _DEBUG 
                             options.nWorkers = 1;
-                            #else
+#else
                             options.nWorkers = strToInt(str.substr(str.find('=') + 1));
-                            #endif // _DEBUG   
+#endif // _DEBUG   
                         else if (strv.find("image_name") != std::string::npos)
                             options.imageName = str.substr(str.find('=') + 1);
-                        else if (strv.find("pattern") != std::string::npos) {
-                            std::string pat = str.substr(str.find('=') + 1);
-                            if (pat.find("none") != std::string::npos)
-                                options.pattern = Options::Pattern::None;
-                            else if (pat.find("stripped") != std::string::npos)
-                                options.pattern = Options::Pattern::Stripped;
-                            else if (pat.find("chessboard") != std::string::npos)
-                                options.pattern = Options::Pattern::Chessboard;
-                            else if(pat.find("shaded_chessboard") != std::string::npos)
-                                options.pattern = Options::Pattern::ShadedChessboard;
-                        }  
+                        else if (strv.find("max_depth") != std::string::npos)
+                            options.maxDepth = strToInt(str.substr(str.find('=') + 1));
                     }
                     else if (blockType == BlockType::Light) {
                         std::vector<std::string> res;
@@ -358,6 +348,18 @@ bool loadScene(const std::string& sceneName, ObjectVector& objects, LightsVector
                             break;
                         }
 
+                        std::string pat = res[i];
+                        if (pat.find("none") != std::string::npos)
+                            object->pattern = PatternType::None;
+                        else if (pat.find("stripped") != std::string::npos)
+                            object->pattern = PatternType::Stripped;
+                        else if (pat.find("shaded_chessboard") != std::string::npos)
+                            object->pattern = PatternType::ShadedChessboard;
+                        else if (pat.find("chessboard") != std::string::npos)
+                            object->pattern = PatternType::Chessboard;
+
+                        i++;
+
                         if (i < res.size()) {
                             if (res[i].find("reflective") != std::string::npos)
                                 object->materialType = MaterialType::Reflective;
@@ -388,25 +390,30 @@ bool loadScene(const std::string& sceneName, ObjectVector& objects, LightsVector
     return false;
 }
 
-int main()
-{
-    auto start = std::chrono::high_resolution_clock::now();
-    
+int renderScene(const std::string & sceneName) {
+    Timer t("Total time");
+
     Options options;
     LightsVector lights;
     ObjectVector objects;
 
-    if (!loadScene("v1.scene", objects, lights, options))
+    if (!loadScene(sceneName, objects, lights, options))
         return -1;
 
-    std::cout << "Starting render " << options.width << "x" << options.height << std::endl;
+    // std::cout << "Starting render " << options.width << "x" << options.height << std::endl;
 
     Vec3f* frameBuffer = new Vec3f[options.height * options.width];
     render(options, objects, lights, frameBuffer);
     savePPM(frameBuffer, options);
     delete[] frameBuffer;
+}
 
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-    std::cout << "Total runtime: " << duration.count() / 1000.0 << "s" << std::endl;
+int main()
+{
+#ifdef _DEBUG 
+    return renderScene("v0.scene");
+#else
+    return renderScene("v1.scene");
+#endif // _DEBUG   
+    return 0;
 }
