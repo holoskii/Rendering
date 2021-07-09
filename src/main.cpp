@@ -1,37 +1,18 @@
+#include "timer.h"
+#include "geometry.h"
+#include "util.h"
 #include "main.h"
+#include "objects.h"
+#include "lights.h"
 
-enum class RayType { PrimaryRay, ShadowRay };
-using ObjectVector = std::vector<std::unique_ptr<Object>>;
-using LightsVector = std::vector<std::unique_ptr<Light>>;
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <map>
+#include <thread>
+#include <string>
 
-struct IntersectInfo
-{
-    const Object* hitObject = nullptr;
-    float tNear = std::numeric_limits<float>::max();
-};
 
-inline float clamp(const float low, const float high, const float val)
-{
-    return std::max(low, std::min(high, val));
-}
-
-int strToInt(const std::string& str)
-{
-    int result = 0;
-    std::stringstream ss{ str };
-    ss >> result;
-    assert(ss.eof() || ss.good());
-    return result;
-}
-
-float strToFloat(const std::string& str)
-{
-    float result = 0;
-    std::stringstream ss{ str };
-    ss >> result;
-    assert(ss.eof() || ss.good());
-    return result;
-}
 
 Vec3f reflect(const Vec3f& dir, const Vec3f& normal)
 {
@@ -95,12 +76,15 @@ bool trace(const Vec3f& orig, const Vec3f& dir,
         if (rayType == RayType::ShadowRay && (*i).get()->materialType == MaterialType::Transparent)
             continue;
         float tNear = std::numeric_limits<float>::max();
-        if ((*i).get()->intersect(orig, dir, tNear) && tNear < intrInfo.tNear) {
+        int triIndex = -1;
+        Vec2f uv;
+        if ((*i).get()->intersect(orig, dir, tNear, triIndex, uv) && tNear < intrInfo.tNear) {
             intrInfo.hitObject = (*i).get();
             intrInfo.tNear = tNear;
+            intrInfo.triIndex = triIndex;
+            intrInfo.uv = uv;
         }
     }
-
     return (intrInfo.hitObject != nullptr);
 }
 
@@ -111,11 +95,16 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
     if (depth > options.maxDepth) return options.backgroundColor;
     IntersectInfo intrInfo;
     if (trace(orig, dir, objects, intrInfo)) {
-        Vec3f hitColor;
+        Vec3f hitColor = intrInfo.hitObject->color;
         Vec3f hitNormal;
         Vec2f hitTexCoordinates;
         Vec3f hitPoint = orig + dir * intrInfo.tNear;
-        intrInfo.hitObject->getSurfaceData(hitPoint, hitNormal, hitTexCoordinates);
+        intrInfo.hitObject->getSurfaceData(hitPoint, intrInfo.triIndex, intrInfo.uv, hitNormal, hitTexCoordinates);
+        //if (intrInfo.triIndex < 17) return options.backgroundColor;
+
+        const Vec3f objectColor = (Vec3f{ 1, 0, 0 } * hitTexCoordinates.x) + (Vec3f{ 0, 1, 0 } * hitTexCoordinates.y);
+        return objectColor;
+        hitColor = { 0 };
 
         if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
             // for diffuse objects collect light from all visible sources
@@ -125,19 +114,19 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
                 lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
                 bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, intrShadInfo, RayType::ShadowRay);
                 float pattern = intrInfo.hitObject->getPattern(hitTexCoordinates);
-                hitColor += (intrInfo.hitObject->color * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
+                hitColor += (objectColor * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
             }
         }
         else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
             // get info from reflected ray
             Vec3f reflectedRay = dir - 2 * dir.dotProduct(hitNormal) * hitNormal;
-            hitColor = 0.95 * castRay(hitPoint + options.bias * hitNormal, reflectedRay, objects, lights, options, depth + 1);
+            hitColor = 0.95f * castRay(hitPoint + options.bias * hitNormal, reflectedRay, objects, lights, options, depth + 1);
         }
         else if (intrInfo.hitObject->materialType == MaterialType::Transparent) {
             float kr = fresnel(dir, hitNormal, intrInfo.hitObject->indexOfRefraction);
             bool outside = dir.dotProduct(hitNormal) < 0;
             Vec3f biasVec = options.bias * hitNormal;
-
+            hitColor = { 0 };
             if (kr < 1) {
                 // compute refraction if it is not a case of total internal reflection
                 Vec3f refractionDirection = refract(dir, hitNormal, intrInfo.hitObject->indexOfRefraction).normalize();
@@ -170,7 +159,7 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
                 specularLight += vis * intrInfo.hitObject->specular * lightIntensity * std::pow(std::max(0.f, R.dotProduct(-dir)), intrInfo.hitObject->nSpecular); // * intrInfo.hitObject->kReflect)
                     // + (intrInfo.hitObject->color * (1 - intrInfo.hitObject->kReflect));
             }
-            hitColor = intrInfo.hitObject->color * intrInfo.hitObject->ambient + diffuseLight + specularLight;
+            hitColor = objectColor * intrInfo.hitObject->ambient + diffuseLight + specularLight;
             hitColor = hitColor * intrInfo.hitObject->getPattern(hitTexCoordinates);
         }
         return hitColor;
@@ -178,42 +167,18 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
     return options.backgroundColor;
 }
 
-int savePPM(Vec3f* frameBuffer, const Options& options)
-{
-    Timer t("Save image");
-
-    // intermediate buffer significantly speeds up file write process
-    char* data = new char[options.height * options.width * 3];
-    char* dataPtr = data;
-    for (int i = 0; i < options.height * options.width; i++)
-        for (int j = 0; j < 3; j++)
-            *dataPtr++ = static_cast<char>(clamp(0.0f, 1.0f, frameBuffer[i][j]) * 255);
-
-    std::string path = options.imagePath + "\\" + options.imageName;
-    std::ofstream of(path, std::ios::out | std::ios::binary);
-    of << "P6\n" << std::to_string(options.width) << " " << std::to_string(options.height) << "\n" << std::to_string(255) << "\n";
-    of.write(data, options.height * options.width * 3);
-    of.close();
-
-    wchar_t* wPath = new wchar_t[strlen(path.c_str()) + 1];
-    mbstowcs(wPath, path.c_str(), strlen(path.c_str()) + 1);
-    ShellExecute(NULL, L"open", wPath, NULL, NULL, SW_SHOWDEFAULT);
-    delete[] wPath;
-    delete[] data;
-    return 0;
-}
 
 void renderWorker(const Options & options, const ObjectVector & objects, const LightsVector & lights,
-    Vec3f * frameBuffer, int y0, int y1)
+    Vec3f * frameBuffer, size_t y0, size_t y1)
 {
     const Vec3f orig = { 0, 0, 0 };
-    const float scale = tan(options.fov * 0.5 / 180.0 * M_PI);
+    const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
     float imageAspectRatio = (options.width) / (float)options.height;
 
-    for (int y = y0; y < y1; y++) {
-        for (int x = 0; x < options.width; x++) {
-            float xPix = (2 * (x + 0.5) / (float)options.width - 1) * scale * imageAspectRatio;
-            float yPix = -(2 * (y + 0.5) / (float)options.height - 1) * scale;
+    for (size_t y = y0; y < y1; y++) {
+        for (size_t x = 0; x < options.width; x++) {
+            float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
+            float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
             Vec3f dir = Vec3f(xPix, yPix, -1).normalize();
             frameBuffer[x + y * options.width] = castRay(orig, dir, objects, lights, options, 0);
         }
@@ -222,12 +187,12 @@ void renderWorker(const Options & options, const ObjectVector & objects, const L
 
 void render(const Options & options, const ObjectVector & objects, const LightsVector & lights, Vec3f * frameBuffer)
 {
-    Timer t("Render");
+    Timer t("Render scene");
 
     std::vector<std::thread*> threadPool;
-    for (int i = 0; i < options.nWorkers; i++) {
-        int y0 = options.height / options.nWorkers * i;
-        int y1 = options.height / options.nWorkers * (i + 1);
+    for (size_t i = 0; i < options.nWorkers; i++) {
+        size_t y0 = options.height / options.nWorkers * i;
+        size_t y1 = options.height / options.nWorkers * (i + 1);
         if (i + 1 == options.nWorkers) y1 = options.height;
         threadPool.push_back(new std::thread(renderWorker, std::cref(options), std::cref(objects), std::cref(lights), frameBuffer, y0, y1));
     }
@@ -238,7 +203,6 @@ void render(const Options & options, const ObjectVector & objects, const LightsV
 
 bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVector & lights, Options & options)
 {
-    Timer t("Load scene");
     enum class BlockType { None, Options, Light, Object };
     std::map<std::string, BlockType> blockMap;
     blockMap["[options]"] = BlockType::Options;
@@ -316,16 +280,17 @@ bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVect
                         std::vector<std::string> res;
                         std::stringstream lineStream(str);
                         std::string cell;
-                        while (std::getline(lineStream, cell, ','))
-                            res.push_back(cell);
-
-                        if (res.size() < 9) {
+                        while (std::getline(lineStream, cell, ',')) {
+                            cell.erase(std::remove(cell.begin(), cell.end(), '\t'), cell.end());
+                            res.emplace_back(cell);
+                        }
+                        if (res.size() < 3) {
                             std::cout << "Short object string\n";
                             break;
                         }
 
                         Object* object;
-                        int i = 0;
+                        size_t i = 0;
                         if (res[1].find("sphere") != std::string::npos) {
                             Vec3f pos{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
                             Vec3f color{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
@@ -342,6 +307,12 @@ bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVect
                             Vec3f color{ strToFloat(res[8]), strToFloat(res[9]), strToFloat(res[10]) };
                             object = new Plane(pos, normal, color);
                             i = 11;
+                        }
+                        else if (res[1].find("mesh") != std::string::npos) {
+                            std::string path = res[2];
+                            if (path[path.length() - 1] == '\"') path.erase(path.length() - 1, 1);
+                            if (path[0] == '\"') path.erase(0, 1);
+                            object = new Mesh(path);
                         }
                         else {
                             std::cout << "Unknown object type\n";
@@ -406,6 +377,7 @@ int renderScene(const std::string & sceneName) {
     render(options, objects, lights, frameBuffer);
     savePPM(frameBuffer, options);
     delete[] frameBuffer;
+    return 0;
 }
 
 int main()
@@ -413,7 +385,7 @@ int main()
 #ifdef _DEBUG 
     return renderScene("v0.scene");
 #else
-    return renderScene("v1.scene");
+    return renderScene("v0.scene");
 #endif // _DEBUG   
     return 0;
 }
