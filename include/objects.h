@@ -60,21 +60,23 @@ class Triangle
 {
 public:
     Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c);
+    Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, const Vec3f& a_n_a, const Vec3f& a_n_b, const Vec3f& a_n_c);
 
     Vec3f a, b, c;
+    Vec3f n_a, n_b, n_c;
 };
 
 class Mesh : public Object
 {
 public:
-    Mesh(const std::string& filename);
+    Mesh();
     bool rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir, const Triangle& tri, 
         float& t, Vec2f& uv) const;
     bool intersect(const Vec3f& orig, const Vec3f& dir, 
         float& t0, int& triIndex, Vec2f& uv) const;
     void getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f& uv, 
         Vec3f& hitNormal, Vec2f& tex) const;
-    void parseOBJ(Mesh& mesh, const std::string& filename);
+    static Mesh* loadOBJ(const std::string& filename, const Vec3f& size, const Vec3f& pos);
 
     std::vector<Triangle> tris;
 };

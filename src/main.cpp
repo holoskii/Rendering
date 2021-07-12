@@ -7,12 +7,10 @@
 
 #include <iostream>
 #include <fstream>
+#include <string>
+#include <thread>
 #include <vector>
 #include <map>
-#include <thread>
-#include <string>
-
-
 
 Vec3f reflect(const Vec3f& dir, const Vec3f& normal)
 {
@@ -88,6 +86,8 @@ bool trace(const Vec3f& orig, const Vec3f& dir,
     return (intrInfo.hitObject != nullptr);
 }
 
+std::map<int, int> triIndexMap;
+
 Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
     const ObjectVector& objects, const LightsVector& lights,
     const Options& options, const int depth)
@@ -100,10 +100,13 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
         Vec2f hitTexCoordinates;
         Vec3f hitPoint = orig + dir * intrInfo.tNear;
         intrInfo.hitObject->getSurfaceData(hitPoint, intrInfo.triIndex, intrInfo.uv, hitNormal, hitTexCoordinates);
-        //if (intrInfo.triIndex < 17) return options.backgroundColor;
 
-        const Vec3f objectColor = (Vec3f{ 1, 0, 0 } * hitTexCoordinates.x) + (Vec3f{ 0, 1, 0 } * hitTexCoordinates.y);
-        return objectColor;
+        if (intrInfo.triIndex >= 0) triIndexMap[intrInfo.triIndex]++;
+
+        Vec3f objectColor = intrInfo.hitObject->color;
+        // return hitNormal;
+        //if (intrInfo.triIndex >= 0) objectColor = (Vec3f{ 1, 0, 0 } * hitTexCoordinates.x) + (Vec3f{ 0, 1, 0 } * hitTexCoordinates.y);
+        //return objectColor;
         hitColor = { 0 };
 
         if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
@@ -115,6 +118,7 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
                 bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, intrShadInfo, RayType::ShadowRay);
                 float pattern = intrInfo.hitObject->getPattern(hitTexCoordinates);
                 hitColor += (objectColor * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
+                //hitColor += objectColor, intrShadInfo.tNear;
             }
         }
         else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
@@ -188,7 +192,7 @@ void renderWorker(const Options & options, const ObjectVector & objects, const L
 void render(const Options & options, const ObjectVector & objects, const LightsVector & lights, Vec3f * frameBuffer)
 {
     Timer t("Render scene");
-
+#ifndef _DEBUG
     std::vector<std::thread*> threadPool;
     for (size_t i = 0; i < options.nWorkers; i++) {
         size_t y0 = options.height / options.nWorkers * i;
@@ -199,6 +203,11 @@ void render(const Options & options, const ObjectVector & objects, const LightsV
 
     for (auto& t : threadPool)
         t->join();
+#else
+    renderWorker(options, objects, lights, frameBuffer, 0, options.height);
+#endif
+
+    //for (auto& p : triIndexMap) std::cout << p.first << ' ' << p.second << '\n';
 }
 
 bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVector & lights, Options & options)
@@ -237,13 +246,13 @@ bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVect
                         else if (strv.find("fov") != std::string::npos)
                             options.fov = strToFloat(str.substr(str.find('=') + 1));
                         else if (strv.find("n_workers") != std::string::npos)
-#ifdef _DEBUG 
-                            options.nWorkers = 1;
-#else
                             options.nWorkers = strToInt(str.substr(str.find('=') + 1));
-#endif // _DEBUG   
-                        else if (strv.find("image_name") != std::string::npos)
-                            options.imageName = str.substr(str.find('=') + 1);
+                        else if (strv.find("image_name") != std::string::npos) {
+                            std::string name = str.substr(str.find('=') + 1);
+                            if (name[0] == '\"') name.erase(0, 1);
+                            if (name[name.length() - 1] == '\"') name.erase(name.length() - 1, 1);
+                            options.imageName = name;
+                        }
                         else if (strv.find("max_depth") != std::string::npos)
                             options.maxDepth = strToInt(str.substr(str.find('=') + 1));
                     }
@@ -312,7 +321,10 @@ bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVect
                             std::string path = res[2];
                             if (path[path.length() - 1] == '\"') path.erase(path.length() - 1, 1);
                             if (path[0] == '\"') path.erase(0, 1);
-                            object = new Mesh(path);
+                            path = options.imagePath + "\\" + path;
+                            Vec3f pos{ strToFloat(res[3]), strToFloat(res[4]), strToFloat(res[5]) };
+                            Vec3f size{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
+                            object = Mesh::loadOBJ(path, pos, size);
                         }
                         else {
                             std::cout << "Unknown object type\n";
@@ -357,7 +369,7 @@ bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVect
         }
         std::getline(ifs, str);
     }
-
+    ifs.close();
     return false;
 }
 
@@ -372,7 +384,6 @@ int renderScene(const std::string & sceneName) {
         return -1;
 
     // std::cout << "Starting render " << options.width << "x" << options.height << std::endl;
-
     Vec3f* frameBuffer = new Vec3f[options.height * options.width];
     render(options, objects, lights, frameBuffer);
     savePPM(frameBuffer, options);
@@ -382,10 +393,6 @@ int renderScene(const std::string & sceneName) {
 
 int main()
 {
-#ifdef _DEBUG 
-    return renderScene("v0.scene");
-#else
-    return renderScene("v0.scene");
-#endif // _DEBUG   
+    return renderScene("files\\scenes\\smooth_shading.scene");
     return 0;
 }
