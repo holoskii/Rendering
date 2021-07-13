@@ -6,11 +6,13 @@
 #include "lights.h"
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
 #include <map>
+#include <atomic>
 
 Vec3f reflect(const Vec3f& dir, const Vec3f& normal)
 {
@@ -86,8 +88,6 @@ bool trace(const Vec3f& orig, const Vec3f& dir,
     return (intrInfo.hitObject != nullptr);
 }
 
-std::map<int, int> triIndexMap;
-
 Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
     const ObjectVector& objects, const LightsVector& lights,
     const Options& options, const int depth)
@@ -101,12 +101,7 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
         Vec3f hitPoint = orig + dir * intrInfo.tNear;
         intrInfo.hitObject->getSurfaceData(hitPoint, intrInfo.triIndex, intrInfo.uv, hitNormal, hitTexCoordinates);
 
-        if (intrInfo.triIndex >= 0) triIndexMap[intrInfo.triIndex]++;
-
         Vec3f objectColor = intrInfo.hitObject->color;
-        // return hitNormal;
-        //if (intrInfo.triIndex >= 0) objectColor = (Vec3f{ 1, 0, 0 } * hitTexCoordinates.x) + (Vec3f{ 0, 1, 0 } * hitTexCoordinates.y);
-        //return objectColor;
         hitColor = { 0 };
 
         if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
@@ -118,7 +113,6 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
                 bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, intrShadInfo, RayType::ShadowRay);
                 float pattern = intrInfo.hitObject->getPattern(hitTexCoordinates);
                 hitColor += (objectColor * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
-                //hitColor += objectColor, intrShadInfo.tNear;
             }
         }
         else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
@@ -172,6 +166,10 @@ Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
 }
 
 
+std::atomic<int> finishedPixels{ 0 };
+std::atomic<int> finishedWorkers{ 0 };
+std::mutex
+
 void renderWorker(const Options & options, const ObjectVector & objects, const LightsVector & lights,
     Vec3f * frameBuffer, size_t y0, size_t y1)
 {
@@ -181,12 +179,23 @@ void renderWorker(const Options & options, const ObjectVector & objects, const L
 
     for (size_t y = y0; y < y1; y++) {
         for (size_t x = 0; x < options.width; x++) {
+            if (x == 75 && y == 69) {
+                // std::cout << "Now\n";
+                //frameBuffer[x + y * options.width] = { 1 };
+                //continue;
+            }
             float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
             float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
             Vec3f dir = Vec3f(xPix, yPix, -1).normalize();
             frameBuffer[x + y * options.width] = castRay(orig, dir, objects, lights, options, 0);
+            finishedPixels.store(finishedPixels.load() + 1);
         }
+        #ifdef _DEBUG
+        const float progressCoef = 100.0f / (options.width * options.height);
+        if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
+        #endif
     }
+    finishedWorkers.store(finishedWorkers.load() + 1);
 }
 
 void render(const Options & options, const ObjectVector & objects, const LightsVector & lights, Vec3f * frameBuffer)
@@ -201,13 +210,24 @@ void render(const Options & options, const ObjectVector & objects, const LightsV
         threadPool.push_back(new std::thread(renderWorker, std::cref(options), std::cref(objects), std::cref(lights), frameBuffer, y0, y1));
     }
 
+    while (finishedWorkers.load() != options.nWorkers) {
+        const float progressCoef = 100.0f / (options.width * options.height);
+        std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
+
+        for (int i = 0; i < 100; i++) {
+            if (finishedWorkers.load() == options.nWorkers) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+
+
     for (auto& t : threadPool)
         t->join();
 #else
     renderWorker(options, objects, lights, frameBuffer, 0, options.height);
 #endif
-
-    //for (auto& p : triIndexMap) std::cout << p.first << ' ' << p.second << '\n';
 }
 
 bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVector & lights, Options & options)
@@ -324,24 +344,30 @@ bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVect
                             path = options.imagePath + "\\" + path;
                             Vec3f pos{ strToFloat(res[3]), strToFloat(res[4]), strToFloat(res[5]) };
                             Vec3f size{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
-                            object = Mesh::loadOBJ(path, pos, size);
+                            object = loadOBJ(path, pos, size);
+                            if (object == nullptr) {
+                                std::cout << "Mesh " << path << " wasn't loaded\n";
+                                exit(-1);
+                            }
+                            i = 9;
                         }
                         else {
                             std::cout << "Unknown object type\n";
                             break;
                         }
 
-                        std::string pat = res[i];
-                        if (pat.find("none") != std::string::npos)
-                            object->pattern = PatternType::None;
-                        else if (pat.find("stripped") != std::string::npos)
-                            object->pattern = PatternType::Stripped;
-                        else if (pat.find("shaded_chessboard") != std::string::npos)
-                            object->pattern = PatternType::ShadedChessboard;
-                        else if (pat.find("chessboard") != std::string::npos)
-                            object->pattern = PatternType::Chessboard;
-
-                        i++;
+                        if (i < res.size()) {
+                            std::string pat = res[i];
+                            if (pat.find("none") != std::string::npos)
+                                object->pattern = PatternType::None;
+                            else if (pat.find("stripped") != std::string::npos)
+                                object->pattern = PatternType::Stripped;
+                            else if (pat.find("shaded_chessboard") != std::string::npos)
+                                object->pattern = PatternType::ShadedChessboard;
+                            else if (pat.find("chessboard") != std::string::npos)
+                                object->pattern = PatternType::Chessboard;
+                            i++;
+                        }
 
                         if (i < res.size()) {
                             if (res[i].find("reflective") != std::string::npos)
@@ -369,7 +395,7 @@ bool loadScene(const std::string & sceneName, ObjectVector & objects, LightsVect
         }
         std::getline(ifs, str);
     }
-    ifs.close();
+    std::cout << "Scene wasn't loaded\n";
     return false;
 }
 
@@ -393,6 +419,6 @@ int renderScene(const std::string & sceneName) {
 
 int main()
 {
-    return renderScene("files\\scenes\\smooth_shading.scene");
+    return renderScene("scenes\\v0.scene");
     return 0;
 }

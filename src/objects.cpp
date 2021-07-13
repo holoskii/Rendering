@@ -1,3 +1,4 @@
+#include "timer.h"
 #include "objects.h"
 #include "util.h"
 
@@ -70,7 +71,7 @@ Plane::Plane(const Vec3f& a_center, const Vec3f& a_normal, const Vec3f& a_color,
 bool Plane::intersect(const Vec3f& orig, const Vec3f& dir, float& t0, int& triIndex, Vec2f& uv) const
 {
     float denom = dir.dotProduct(normal);
-    if (fabs(denom) < 1e-6)
+    if (fabs(denom) < 1e-8)
         return false;
     t0 = ((center - orig).dotProduct(normal)) / denom;
     return (t0 >= 0);
@@ -111,10 +112,10 @@ bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
     const Vec3f& v2 = tri.c;
 #if 0
     // compute plane's normal
-    Vec3f v0v1 = v1 - v0;
-    Vec3f v0v2 = v2 - v0;
+    Vec3f v0v1 = ;
+    Vec3f v0v2 = ;
     // no need to normalize
-    Vec3f N = v0v1.crossProduct(v0v2); // N
+    Vec3f N = (v1 - v0).crossProduct(v2 - v0); // N
     //Vec3f normal = (tri.n_a + tri.n_b + tri.n_c).normalize();
     // std::cout << N << " " << normal << '\n';
    
@@ -126,7 +127,7 @@ bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
 
     // check if ray and plane are parallel ?
     float NdotRayDirection = N.dotProduct(dir);
-    if (fabs(NdotRayDirection) < 1e-4) // almost 0 
+    if (fabs(NdotRayDirection) < 1e-8) // almost 0 
         return false; // they are parallel so they don't intersect ! 
 
     // compute d parameter using equation 2
@@ -169,12 +170,11 @@ bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
     Vec3f pvec = dir.crossProduct(v0v2);
     float det = v0v1.dotProduct(pvec);
 
-    // if (-N.dotProduct(dir) < 0) return false;
-
-    if (det < 0) return false;
+    // backface culling
+    // if (det < 1e-8) return false;
 
     // ray and triangle are parallel if det is close to 0
-    if (fabs(det) < 1e-4) return false;
+    if (fabs(det) < 1e-8) return false;
 
     float invDet = 1 / det;
 
@@ -221,101 +221,4 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f
     hitNormal = ((tri.n_b * uv.x + tri.n_c * uv.y + tri.n_a * (1 - uv.x - uv.y)) / 3).normalize();
     //hitNormal = (v1 - v0).crossProduct(v2 - v0).normalize();
     tex = Vec2f{ uv.x, uv.y };
-}
-
-Mesh* Mesh::loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
-{
-    int count = 0;
-
-    Mesh* mesh = new Mesh();
-
-    std::cout << "Mesh: " << filename << '\n';
-    std::vector<Vec3f> vertexData;
-    std::vector<Vec3f> normalData;
-
-    std::ifstream ifs(filename, std::ios::in);
-
-    Vec3f min = { std::numeric_limits<float>::max() };
-    Vec3f max = { std::numeric_limits<float>::min() };
-
-    bool normalized = false;
-
-    int dumpInt;
-    char dumpChar;
-    std::string line, dumpStr, type;
-    do {
-        std::getline(ifs, line);
-        if (line.find('#') != std::string::npos)
-            line.erase(line.find('#'));
-        if (line.length() <= 0)
-            continue;
-        
-        std::stringstream ss{ line };
-        std::getline(ss, type, ' ');        
-        
-        if (type == std::string("v")) {
-            
-            assert(!normalized);
-            float x, y, z;
-            ss >> x >> y >> z;
-            min.x = std::min(x, min.x);
-            min.y = std::min(y, min.y);
-            min.z = std::min(z, min.z);
-            max.x = std::max(x, max.x);
-            max.y = std::max(y, max.y);
-            max.z = std::max(z, max.z);
-
-            vertexData.emplace_back(Vec3f(x, y, z));
-        } 
-        else if (type == std::string("vn")) {
-            float x, y, z;
-            ss >> x >> y >> z;
-            Vec3f normal = Vec3f{ x, y, z }.normalize();
-            normalData.emplace_back(normal);
-        }
-        else if (type == std::string("f")) {
-            count++;
-            if (!normalized) {
-                normalized = true;
-                Vec3f normSize = size;
-                normSize.y = normSize.x / ((max.x - min.x) / (max.y - min.y));
-                normSize.z = normSize.x / ((max.x - min.x) / (max.z - min.z));
-                for (auto& v: vertexData) {
-                    v.x = normSize.x * ((v.x - min.x) / (max.x - min.x) - 0.5f) + pos.x;
-                    v.y = normSize.y * ((v.y - min.y) / (max.y - min.y) - 0.5f) + pos.y;
-                    v.z = normSize.z * ((v.z - min.z) / (max.z - min.z) - 0.5f) + pos.z;
-                }
-            }
-            size_t v1, v2, v3, v4;
-            size_t n1, n2, n3, n4;
-            if (std::count(line.begin(), line.end(), '/') < 6) {
-                ss >> v1 >> v2 >> v3;
-                assert(v1 <= vertexData.size() && v2 <= vertexData.size() && v3 <= vertexData.size());
-                mesh->tris.emplace_back(Triangle(vertexData.at(v1 - 1), vertexData.at(v2 - 1), vertexData.at(v3 - 1)));
-            }
-            else if (std::count(line.begin(), line.end(), '/') == 6) {
-                ss >> v1 >> dumpChar >> dumpInt >> dumpChar >> n1;
-                ss >> v2 >> dumpChar >> dumpInt >> dumpChar >> n2;
-                ss >> v3 >> dumpChar >> dumpInt >> dumpChar >> n3;
-                assert(v1 <= vertexData.size() && v2 <= vertexData.size() && v3 <= vertexData.size());
-                assert(n1 <= normalData.size() && n2 <= normalData.size() && n3 <= normalData.size());
-                mesh->tris.emplace_back(Triangle(vertexData.at(v1 - 1), vertexData.at(v2 - 1), vertexData.at(v3 - 1), normalData.at(n1 - 1), normalData.at(n2 - 1), normalData.at(n3 - 1)));
-            }
-            else if (std::count(line.begin(), line.end(), '/') == 8) {
-                ss >> v1 >> dumpChar >> dumpInt >> dumpChar >> n1;
-                ss >> v2 >> dumpChar >> dumpInt >> dumpChar >> n2;
-                ss >> v3 >> dumpChar >> dumpInt >> dumpChar >> n3;
-                ss >> v4 >> dumpChar >> dumpInt >> dumpChar >> n4;
-                assert(v1 <= vertexData.size() && v2 <= vertexData.size() && v3 <= vertexData.size() && v4 <= vertexData.size());
-                assert(n1 <= normalData.size() && n2 <= normalData.size() && n3 <= normalData.size() && n4 <= normalData.size());
-                mesh->tris.emplace_back(Triangle(vertexData.at(v1 - 1), vertexData.at(v2 - 1), vertexData.at(v3 - 1), normalData.at(n1 - 1), normalData.at(n2 - 1), normalData.at(n3 - 1)));
-                mesh->tris.emplace_back(Triangle(vertexData.at(v1 - 1), vertexData.at(v3 - 1), vertexData.at(v4 - 1), normalData.at(n1 - 1), normalData.at(n3 - 1), normalData.at(n4 - 1)));
-            }
-            else {
-                std::cout << "unhandled polygon count\n";
-            }
-        }
-    } while (ifs.good());
-    ifs.close();
-    return mesh;
 }

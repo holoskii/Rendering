@@ -1,6 +1,8 @@
 #pragma once
 
 #include "geometry.h"
+#include "lights.h"
+#include "objects.h"
 #include "main.h"
 #include <cmath>
 #include <sstream>
@@ -42,3 +44,5 @@ inline float strToFloat(const std::string& str)
 }
 
 int savePPM(Vec3f* frameBuffer, const Options& options);
+
+Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size);

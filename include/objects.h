@@ -76,7 +76,6 @@ public:
         float& t0, int& triIndex, Vec2f& uv) const;
     void getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f& uv, 
         Vec3f& hitNormal, Vec2f& tex) const;
-    static Mesh* loadOBJ(const std::string& filename, const Vec3f& size, const Vec3f& pos);
 
     std::vector<Triangle> tris;
 };
