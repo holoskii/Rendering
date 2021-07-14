@@ -407,5 +407,13 @@ int Scene::render()
 
 	savePPM(frameBuffer, options);
 	delete[] frameBuffer;
+
+#ifdef _STATS
+	std::cout << "Ray triangle tests: " << rayTriTests.load() << '\n';
+	#ifndef _NO_ACCEL_STRUCT
+		std::cout << "Acceleration structures tests: " << accelStructTests.load() << '\n';
+	#endif // _NO_ACCEL_STRUCT
+#endif // _STATS
+
 	return 0;
 }

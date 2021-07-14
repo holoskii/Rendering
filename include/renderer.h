@@ -1,14 +1,19 @@
 #pragma once
 
+#include <atomic>
+
 class Options;
 class Scene;
 struct IntersectInfo;
 
+#ifdef _STATS
+inline std::atomic<int> rayTriTests{ 0 };
+inline std::atomic<int> accelStructTests{ 0 };
+#endif
+
 #include "geometry.h"
 #include "objects.h"
 #include "lights.h"
-
-#include <atomic>
 
 enum class RayType { PrimaryRay, ShadowRay };
 

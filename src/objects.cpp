@@ -11,6 +11,9 @@ Mesh::Mesh()
 bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
 	const Triangle& tri, float& t, Vec2f& uv) const
 {
+#ifdef _STATS
+	rayTriTests.store(rayTriTests.load() + 1);
+#endif // _STATS
 	const Vec3f& v0 = tri.a;
 	const Vec3f& v1 = tri.b;
 	const Vec3f& v2 = tri.c;
@@ -133,6 +136,12 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f
 
 bool AccelerationStructure::intersect(const Vec3f& orig, const Vec3f& dir) const
 {
+#ifdef _NO_ACCEL_STRUCT
+	return true;
+#endif // _NO_ACCEL_STRUCT
+#ifdef _STATS
+	accelStructTests.store(accelStructTests.load() + 1);
+#endif // _STATS
 	const Vec3f invdir = 1 / dir;
 	const int sign[3] = { (invdir.x < 0), (invdir.y < 0), (invdir.z < 0) };
 
