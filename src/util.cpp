@@ -107,6 +107,9 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
                     v.y = normSize.y * ((v.y - min.y) / range.y - 0.5f) + pos.y;
                     v.z = normSize.z * ((v.z - min.z) / range.z - 0.5f) + pos.z;
                 }
+
+                mesh->accelStruct.bounds[0] = pos - normSize / 2;
+                mesh->accelStruct.bounds[1] = pos + normSize / 2;
             }
 
             int slashCount = 0;

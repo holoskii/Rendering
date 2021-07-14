@@ -1,8 +1,12 @@
 #include "objects.h"
 #include "timer.h"
 #include "util.h"
+#include "renderer.h"
 
-Mesh::Mesh() {}
+Mesh::Mesh() 
+{
+	objectType = ObjectType::Mesh;
+}
 
 bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
 	const Triangle& tri, float& t, Vec2f& uv) const
@@ -97,6 +101,9 @@ bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
 
 bool Mesh::intersect(const Vec3f& orig, const Vec3f& dir, float& t0, int& triIndex, Vec2f& uv) const
 {
+	if (!accelStruct.intersect(orig, dir))
+		return false;
+
 	int index = 0;
 	bool inter = false;
 	t0 = std::numeric_limits<float>::max();
@@ -122,6 +129,39 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f
 	//hitNormal = (v1 - v0).crossProduct(v2 - v0).normalize();
 	tex = Vec2f{ uv.x, uv.y };
 }
+
+
+bool AccelerationStructure::intersect(const Vec3f& orig, const Vec3f& dir) const
+{
+	const Vec3f invdir = 1 / dir;
+	const int sign[3] = { (invdir.x < 0), (invdir.y < 0), (invdir.z < 0) };
+
+	float tmin, tmax, tymin, tymax, tzmin, tzmax;
+	tmin = (bounds[sign[0]].x - orig.x) * invdir.x;
+	tmax = (bounds[1 - sign[0]].x - orig.x) * invdir.x;
+	tymin = (bounds[sign[1]].y - orig.y) * invdir.y;
+	tymax = (bounds[1 - sign[1]].y - orig.y) * invdir.y;
+
+	if ((tmin > tymax) || (tymin > tmax))
+		return false;
+	if (tymin > tmin)
+		tmin = tymin;
+	if (tymax < tmax)
+		tmax = tymax;
+
+	tzmin = (bounds[sign[2]].z - orig.z) * invdir.z;
+	tzmax = (bounds[1 - sign[2]].z - orig.z) * invdir.z;
+
+	if ((tmin > tzmax) || (tzmin > tmax))
+		return false;
+	if (tzmin > tmin)
+		tmin = tzmin;
+	if (tzmax < tmax)
+		tmax = tzmax;
+
+	return true;
+}
+
 
 Object::Object(const Vec3f& a_center, const Vec3f& a_color,
 	const MaterialType& a_materialType)
@@ -152,6 +192,7 @@ Sphere::Sphere(const Vec3f& a_center, const float a_r, const Vec3f& a_color,
 	: Object(a_center, a_color, a_materialType), r(a_r)
 {
 	r2 = r * r;
+	objectType = ObjectType::Sphere;
 }
 
 bool Sphere::intersect(const Vec3f& orig, const Vec3f& dir, float& t0, int& triIndex, Vec2f& uv) const
@@ -183,6 +224,7 @@ Plane::Plane(const Vec3f& a_center, const Vec3f& a_normal, const Vec3f& a_color,
 	: Object(a_center, a_color, a_materialType), normal(a_normal)
 {
 	normal.normalize();
+	objectType = ObjectType::Plane;
 }
 
 bool Plane::intersect(const Vec3f& orig, const Vec3f& dir, float& t0, int& triIndex, Vec2f& uv) const

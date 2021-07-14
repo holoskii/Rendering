@@ -5,6 +5,7 @@
 #include <memory>
 class Object;
 using ObjectVector = std::vector<std::unique_ptr<Object>>;
+enum class ObjectType { Object, Sphere, Plane, Mesh };
 enum class MaterialType { Diffuse, Reflective, Transparent, Phong };
 enum class PatternType { None, Stripped, Chessboard, ShadedChessboard };
 
@@ -24,6 +25,7 @@ public:
 	Vec3f center;
 	Vec3f color;
 	MaterialType materialType;
+	ObjectType objectType = ObjectType::Object;
 	PatternType pattern = PatternType::None;
 	float indexOfRefraction = 1.4f;  // used for Reflective only
 	float ambient = 0.1f;          // used for Phong only
@@ -69,6 +71,14 @@ public:
 	Vec3f n_a, n_b, n_c;
 };
 
+class AccelerationStructure
+{
+public:
+	bool intersect(const Vec3f& orig, const Vec3f& dir) const;
+
+	Vec3f bounds[2];
+};
+
 class Mesh : public Object
 {
 public:
@@ -80,6 +90,7 @@ public:
 	void getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f& uv,
 		Vec3f& hitNormal, Vec2f& tex) const;
 
+	AccelerationStructure accelStruct;
 	std::vector<Triangle> tris;
 };
 
