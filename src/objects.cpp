@@ -104,17 +104,18 @@ bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
 
 bool Mesh::intersect(const Vec3f& orig, const Vec3f& dir, float& t0, int& triIndex, Vec2f& uv) const
 {
-	if (!accelStruct.intersect(orig, dir))
-		return false;
+	// if (!accelStruct.intersect(orig, dir)) return false;
 
 	int index = 0;
 	bool inter = false;
+	Vec2f tempuv;
 	t0 = std::numeric_limits<float>::max();
 	for (const Triangle& tri : tris) {
 		float t;
-		if (rayTriangleIntersect(orig, dir, tri, t, uv) && t < t0) {
+		if (rayTriangleIntersect(orig, dir, tri, t, tempuv) && t < t0) {
 			inter = true;
 			t0 = t;
+			uv = tempuv;
 			triIndex = index;
 		}
 		index++;
