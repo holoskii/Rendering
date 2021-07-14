@@ -1,23 +1,36 @@
+// timer to measure execution time in milliseconds
 #pragma once
 
 #include <string>
 #include <chrono>
 #include <iostream>
 
-class Timer 
+class Timer
 {
 public:
 	Timer(std::string a_name = "Unnamed timer:")
-		: name{ a_name } {
-		start = std::chrono::high_resolution_clock::now();
+		: name{ a_name }
+	{
+		startTime = std::chrono::high_resolution_clock::now();
+		running = true;
 	}
-	~Timer() {
-		auto stop = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
-		std::cout << name  << " \t" << duration << " ms" << std::endl;
+
+	~Timer()
+	{
+		stop();
+	}
+
+	void stop()
+	{
+		if (!running)
+			return;
+		auto stopTime = std::chrono::high_resolution_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count();
+		std::cout << name << " \t" << duration << " ms" << std::endl;
 	}
 
 private:
 	std::string name;
-	std::chrono::steady_clock::time_point start;
+	std::chrono::steady_clock::time_point startTime;
+	bool running;
 };

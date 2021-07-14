@@ -1,12 +1,14 @@
 #include "util.h"
 #include "timer.h"
+#include "renderer.h"
 
 #define NOMINMAX
 #include "windows.h"
 #include "shellapi.h"
 #include <fstream>
-#include <fstream>
 #include <algorithm>
+#include <map>
+#include <string>
 
 int savePPM(Vec3f* frameBuffer, const Options& options)
 {
