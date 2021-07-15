@@ -1,4 +1,7 @@
 # RayTracing
+## Reflection and refraction
+![](https://github.com/holoskii/RayTracing/blob/master/images/v1.out.jpeg)
+
 ## Normal Shading
 No smooth shading|Smooth shading
 :-------------------------:|:-------------------------:
