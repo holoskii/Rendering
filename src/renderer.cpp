@@ -69,13 +69,24 @@ bool Renderer::trace(const Vec3f& orig, const Vec3f& dir,
 		if (rayType == RayType::ShadowRay && (*i).get()->materialType == MaterialType::Transparent)
 			continue;
 		float tNear = std::numeric_limits<float>::max();
-		int triIndex = -1;
+		const Triangle* ptr = nullptr;
 		Vec2f uv;
-		if ((*i).get()->intersect(orig, dir, tNear, triIndex, uv) && tNear < intrInfo.tNear) {
-			intrInfo.hitObject = (*i).get();
-			intrInfo.tNear = tNear;
-			intrInfo.triIndex = triIndex;
-			intrInfo.uv = uv;
+
+		bool intersect = false;
+		if ((*i).get()->objectType == ObjectType::Mesh) {
+			if (dynamic_cast<Mesh*>((*i).get())->intersectMesh(orig, dir, tNear, ptr, uv) && tNear < intrInfo.tNear) {
+				intrInfo.hitObject = (*i).get();
+				intrInfo.tNear = tNear;
+				intrInfo.triPtr = ptr;
+				intrInfo.uv = uv;
+			}
+		}
+		else {
+			if ((*i).get()->intersectObject(orig, dir, tNear, uv) && tNear < intrInfo.tNear) {
+				intrInfo.hitObject = (*i).get();
+				intrInfo.tNear = tNear;
+				intrInfo.uv = uv;
+			}
 		}
 	}
 	return (intrInfo.hitObject != nullptr);
@@ -88,11 +99,15 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir,
 	if (depth > options.maxDepth) return options.backgroundColor;
 	IntersectInfo intrInfo;
 	if (trace(orig, dir, objects, intrInfo)) {
+		if (intrInfo.hitObject->objectType == ObjectType::Mesh) {
+
+		}
+
 		Vec3f hitColor = intrInfo.hitObject->color;
 		Vec3f hitNormal;
 		Vec2f hitTexCoordinates;
 		Vec3f hitPoint = orig + dir * intrInfo.tNear;
-		intrInfo.hitObject->getSurfaceData(hitPoint, intrInfo.triIndex, intrInfo.uv, hitNormal, hitTexCoordinates);
+		intrInfo.hitObject->getSurfaceData(hitPoint, intrInfo.triPtr, intrInfo.uv, hitNormal, hitTexCoordinates);
 
 		Vec3f objectColor = intrInfo.hitObject->color;
 		hitColor = { 0 };
@@ -111,7 +126,7 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir,
 		else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
 			// get info from reflected ray
 			Vec3f reflectedRay = dir - 2 * dir.dotProduct(hitNormal) * hitNormal;
-			hitColor = 0.95f * castRay(hitPoint + options.bias * hitNormal, reflectedRay, objects, lights, options, depth + 1);
+			hitColor = 0.8f * castRay(hitPoint + options.bias * hitNormal, reflectedRay, objects, lights, options, depth + 1);
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Transparent) {
 			float kr = fresnel(dir, hitNormal, intrInfo.hitObject->indexOfRefraction);
@@ -309,12 +324,14 @@ bool Scene::loadScene(const std::string& sceneName)
 						path = options.imagePath + "\\" + path;
 						Vec3f pos{ strToFloat(res[3]), strToFloat(res[4]), strToFloat(res[5]) };
 						Vec3f size{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
+						Vec3f color{ strToFloat(res[9]), strToFloat(res[10]), strToFloat(res[11]) };
 						object = loadOBJ(path, pos, size);
+						object->color = color;
 						if (object == nullptr) {
 							std::cout << "Mesh " << path << " wasn't loaded\n";
 							exit(-1);
 						}
-						i = 9;
+						i = 12;
 					}
 					else {
 						std::cout << "Unknown object type\n";

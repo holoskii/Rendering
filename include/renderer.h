@@ -54,7 +54,7 @@ struct IntersectInfo
 {
 	const Object* hitObject = nullptr;
 	float tNear = std::numeric_limits<float>::max();
-	int triIndex = -1;
+	const Triangle* triPtr = nullptr;
 	Vec2f uv{ -1,-1 };
 };
 

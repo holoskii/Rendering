@@ -8,8 +8,208 @@ Mesh::Mesh()
 	objectType = ObjectType::Mesh;
 }
 
-bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
-	const Triangle& tri, float& t, Vec2f& uv) const
+bool Mesh::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const
+{
+	std::cout << "Object intersect called with mesh\n";
+	std::exit(-1);
+}
+
+bool Mesh::intersectMesh(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, Vec2f& uv) const
+{
+	return accelStruct.intersectAccelStruct(orig, dir, t0, triPtr, uv);
+}
+
+void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const
+{
+#if 1
+	// vertex normal shading
+	hitNormal = ((triPtr->n_b * uv.x + triPtr->n_c * uv.y + triPtr->n_a * (1 - uv.x - uv.y)) / 3).normalize();
+#else
+	// triangle normal shading
+	const Vec3f& v0 = triPtr->a;
+	const Vec3f& v1 = triPtr->b;
+	const Vec3f& v2 = triPtr->c;
+	hitNormal = (v1 - v0).crossProduct(v2 - v0).normalize();
+#endif
+	 tex = Vec2f{ uv.x, uv.y };
+}
+
+
+AccelerationStructure::AccelerationStructure() {}
+
+void AccelerationStructure::setTris(std::vector<Triangle> a_tris)
+{
+	tris = std::move(a_tris);
+}
+
+void AccelerationStructure::setBounds(const Vec3f& a, const Vec3f& b)
+{
+	bounds[0] = a;
+	bounds[1] = b;
+}
+
+bool AccelerationStructure::intersectBox(const Vec3f& orig, const Vec3f& dir) const
+{
+#ifdef _NO_ACCEL_STRUCT
+	return true;
+#endif // _NO_ACCEL_STRUCT
+#ifdef _STATS
+	accelStructTests.store(accelStructTests.load() + 1);
+#endif // _STATS
+	const Vec3f invdir = 1 / dir;
+	const int sign[3] = { (invdir.x < 0), (invdir.y < 0), (invdir.z < 0) };
+
+	float tmin, tmax, tymin, tymax, tzmin, tzmax;
+	tmin = (bounds[sign[0]].x - orig.x) * invdir.x;
+	tmax = (bounds[1 - sign[0]].x - orig.x) * invdir.x;
+	tymin = (bounds[sign[1]].y - orig.y) * invdir.y;
+	tymax = (bounds[1 - sign[1]].y - orig.y) * invdir.y;
+
+	if ((tmin > tymax) || (tymin > tmax))
+		return false;
+	if (tymin > tmin)
+		tmin = tymin;
+	if (tymax < tmax)
+		tmax = tymax;
+
+	tzmin = (bounds[sign[2]].z - orig.z) * invdir.z;
+	tzmax = (bounds[1 - sign[2]].z - orig.z) * invdir.z;
+
+	if ((tmin > tzmax) || (tzmin > tmax))
+		return false;
+	if (tzmin > tmin)
+		tmin = tzmin;
+	if (tzmax < tmax)
+		tmax = tzmax;
+
+	return true;
+}
+
+bool AccelerationStructure::intersectAccelStruct(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, Vec2f& uv) const
+{
+	if (!intersectBox(orig, dir)) return false;
+
+	//const Triangle* tri = nullptr;
+	bool inter = false;
+	Vec2f tempuv;
+	t0 = std::numeric_limits<float>::max();
+	for (const Triangle& tri : tris) {
+		float t;
+		if (Triangle::rayTriangleIntersect(orig, dir, tri, t, tempuv) && t < t0) {
+			inter = true;
+			t0 = t;
+			uv = tempuv;
+			triPtr = &tri;
+		}
+	}
+	return inter;
+}
+
+const Triangle& AccelerationStructure::getTri(size_t index) const
+{
+	return std::ref(tris.at(index));
+}
+
+
+Object::Object(const Vec3f& a_center, const Vec3f& a_color,
+	const MaterialType& a_materialType)
+	: color(a_color), center(a_center), materialType(a_materialType) {}
+
+float Object::getPattern(Vec2f texture) const
+{
+	if (pattern == PatternType::None)
+		return 1.0f;
+	float scaleS = 10, scaleT = 10;
+	float angle = degToRad(45);
+	float s = texture.x * cos(angle) - texture.y * sin(angle);
+	float t = texture.y * cos(angle) + texture.x * sin(angle);
+	float res = 1.0f;
+
+	if (pattern == PatternType::Stripped)
+		res = (modulo(s * scaleS) < 0.5);
+	else if (pattern == PatternType::Chessboard)
+		res = (float)((modulo(s * scaleS) < 0.5) ^ (modulo(t * scaleT) < 0.5));
+	else if (pattern == PatternType::ShadedChessboard)
+		res = (cos(texture.y * 2 * M_PI * scaleT * t) * sin(texture.x * 2 * M_PI * scaleS * s) + 1) * 0.5f;
+	return res < 0.1f ? 0.1f : res;
+}
+
+
+Sphere::Sphere(const Vec3f& a_center, const float a_r, const Vec3f& a_color,
+	const MaterialType& a_materialType)
+	: Object(a_center, a_color, a_materialType), r(a_r)
+{
+	r2 = r * r;
+	objectType = ObjectType::Sphere;
+}
+
+bool Sphere::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const
+{
+	Vec3f L = center - orig;
+	float tca = L.dotProduct(dir);
+	float d2 = L.dotProduct(L) - tca * tca;
+	if (d2 > r2) return false;
+	float thc = sqrtf(r2 - d2);
+	t0 = tca - thc;
+	float t1 = tca + thc;
+	if (t0 < 0) t0 = t1;
+	if (t0 < 0) return false;
+	return true;
+}
+
+void Sphere::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const
+{
+	hitNormal = hitPoint - center;
+	hitNormal.normalize();
+
+	tex.x = (1.0f + atan2(hitNormal.z, hitNormal.x) / M_PI) * 0.5f;
+	tex.y = acosf(hitNormal.y) / M_PI;
+}
+
+
+Plane::Plane(const Vec3f& a_center, const Vec3f& a_normal, const Vec3f& a_color,
+	const MaterialType& a_materialType)
+	: Object(a_center, a_color, a_materialType), normal(a_normal)
+{
+	normal.normalize();
+	objectType = ObjectType::Plane;
+}
+
+bool Plane::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const
+{
+	float denom = dir.dotProduct(normal);
+	if (fabs(denom) < 1e-8)
+		return false;
+	t0 = ((center - orig).dotProduct(normal)) / denom;
+	return (t0 >= 0);
+}
+
+void Plane::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const
+{
+	hitNormal = normal;
+
+	Vec3f dist = hitPoint - center;
+	tex.x = dist.x / 15;
+	tex.y = dist.z / 15;
+}
+
+
+Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c)
+	: a(a_a), b(a_b), c(a_c)
+{
+	n_a = n_b = n_c = (a_b - a_a).crossProduct(a_c - a_a);
+}
+
+Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, const Vec3f& a_n_a, const Vec3f& a_n_b, const Vec3f& a_n_c)
+	: Triangle(a_a, a_b, a_c)
+{
+	n_a = a_n_a;
+	n_b = a_n_b;
+	n_c = a_n_c;
+}
+
+bool Triangle::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir, const Triangle& tri,
+	float& t, Vec2f& uv)
 {
 #ifdef _STATS
 	rayTriTests.store(rayTriTests.load() + 1);
@@ -100,172 +300,4 @@ bool Mesh::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir,
 	uv.x = u; uv.y = v;
 	return true;
 #endif
-}
-
-bool Mesh::intersect(const Vec3f& orig, const Vec3f& dir, float& t0, int& triIndex, Vec2f& uv) const
-{
-	// if (!accelStruct.intersect(orig, dir)) return false;
-
-	int index = 0;
-	bool inter = false;
-	Vec2f tempuv;
-	t0 = std::numeric_limits<float>::max();
-	for (const Triangle& tri : tris) {
-		float t;
-		if (rayTriangleIntersect(orig, dir, tri, t, tempuv) && t < t0) {
-			inter = true;
-			t0 = t;
-			uv = tempuv;
-			triIndex = index;
-		}
-		index++;
-	}
-	return inter;
-}
-
-void Mesh::getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const
-{
-	const Vec3f& v0 = tris.at(triIndex).a;
-	const Vec3f& v1 = tris.at(triIndex).b;
-	const Vec3f& v2 = tris.at(triIndex).c;
-	const Triangle& tri = tris.at(triIndex);
-	hitNormal = ((tri.n_b * uv.x + tri.n_c * uv.y + tri.n_a * (1 - uv.x - uv.y)) / 3).normalize();
-	//hitNormal = (v1 - v0).crossProduct(v2 - v0).normalize();
-	tex = Vec2f{ uv.x, uv.y };
-}
-
-
-bool AccelerationStructure::intersect(const Vec3f& orig, const Vec3f& dir) const
-{
-#ifdef _NO_ACCEL_STRUCT
-	return true;
-#endif // _NO_ACCEL_STRUCT
-#ifdef _STATS
-	accelStructTests.store(accelStructTests.load() + 1);
-#endif // _STATS
-	const Vec3f invdir = 1 / dir;
-	const int sign[3] = { (invdir.x < 0), (invdir.y < 0), (invdir.z < 0) };
-
-	float tmin, tmax, tymin, tymax, tzmin, tzmax;
-	tmin = (bounds[sign[0]].x - orig.x) * invdir.x;
-	tmax = (bounds[1 - sign[0]].x - orig.x) * invdir.x;
-	tymin = (bounds[sign[1]].y - orig.y) * invdir.y;
-	tymax = (bounds[1 - sign[1]].y - orig.y) * invdir.y;
-
-	if ((tmin > tymax) || (tymin > tmax))
-		return false;
-	if (tymin > tmin)
-		tmin = tymin;
-	if (tymax < tmax)
-		tmax = tymax;
-
-	tzmin = (bounds[sign[2]].z - orig.z) * invdir.z;
-	tzmax = (bounds[1 - sign[2]].z - orig.z) * invdir.z;
-
-	if ((tmin > tzmax) || (tzmin > tmax))
-		return false;
-	if (tzmin > tmin)
-		tmin = tzmin;
-	if (tzmax < tmax)
-		tmax = tzmax;
-
-	return true;
-}
-
-
-Object::Object(const Vec3f& a_center, const Vec3f& a_color,
-	const MaterialType& a_materialType)
-	: color(a_color), center(a_center), materialType(a_materialType) {}
-
-float Object::getPattern(Vec2f texture) const
-{
-	if (pattern == PatternType::None)
-		return 1.0f;
-	float scaleS = 10, scaleT = 10;
-	float angle = degToRad(45);
-	float s = texture.x * cos(angle) - texture.y * sin(angle);
-	float t = texture.y * cos(angle) + texture.x * sin(angle);
-	float res = 1.0f;
-
-	if (pattern == PatternType::Stripped)
-		res = (modulo(s * scaleS) < 0.5);
-	else if (pattern == PatternType::Chessboard)
-		res = (float)((modulo(s * scaleS) < 0.5) ^ (modulo(t * scaleT) < 0.5));
-	else if (pattern == PatternType::ShadedChessboard)
-		res = (cos(texture.y * 2 * M_PI * scaleT * t) * sin(texture.x * 2 * M_PI * scaleS * s) + 1) * 0.5;
-	return res < 0.1f ? 0.1f : res;
-}
-
-
-Sphere::Sphere(const Vec3f& a_center, const float a_r, const Vec3f& a_color,
-	const MaterialType& a_materialType)
-	: Object(a_center, a_color, a_materialType), r(a_r)
-{
-	r2 = r * r;
-	objectType = ObjectType::Sphere;
-}
-
-bool Sphere::intersect(const Vec3f& orig, const Vec3f& dir, float& t0, int& triIndex, Vec2f& uv) const
-{
-	Vec3f L = center - orig;
-	float tca = L.dotProduct(dir);
-	float d2 = L.dotProduct(L) - tca * tca;
-	if (d2 > r2) return false;
-	float thc = sqrtf(r2 - d2);
-	t0 = tca - thc;
-	float t1 = tca + thc;
-	if (t0 < 0) t0 = t1;
-	if (t0 < 0) return false;
-	return true;
-}
-
-void Sphere::getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const
-{
-	hitNormal = hitPoint - center;
-	hitNormal.normalize();
-
-	tex.x = (1 + atan2(hitNormal.z, hitNormal.x) / M_PI) * 0.5;
-	tex.y = acosf(hitNormal.y) / M_PI;
-}
-
-
-Plane::Plane(const Vec3f& a_center, const Vec3f& a_normal, const Vec3f& a_color,
-	const MaterialType& a_materialType)
-	: Object(a_center, a_color, a_materialType), normal(a_normal)
-{
-	normal.normalize();
-	objectType = ObjectType::Plane;
-}
-
-bool Plane::intersect(const Vec3f& orig, const Vec3f& dir, float& t0, int& triIndex, Vec2f& uv) const
-{
-	float denom = dir.dotProduct(normal);
-	if (fabs(denom) < 1e-8)
-		return false;
-	t0 = ((center - orig).dotProduct(normal)) / denom;
-	return (t0 >= 0);
-}
-
-void Plane::getSurfaceData(const Vec3f& hitPoint, const int triIndex, const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const
-{
-	hitNormal = normal;
-
-	Vec3f dist = hitPoint - center;
-	tex.x = dist.x / 15;
-	tex.y = dist.z / 15;
-}
-
-
-Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c)
-	: a(a_a), b(a_b), c(a_c)
-{
-	n_a = n_b = n_c = (a_b - a_a).crossProduct(a_c - a_a);
-}
-
-Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, const Vec3f& a_n_a, const Vec3f& a_n_b, const Vec3f& a_n_c)
-	: Triangle(a_a, a_b, a_c)
-{
-	n_a = a_n_a;
-	n_b = a_n_b;
-	n_c = a_n_c;
 }
