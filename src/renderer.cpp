@@ -99,10 +99,11 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir,
 	if (depth > options.maxDepth) return options.backgroundColor;
 	IntersectInfo intrInfo;
 	if (trace(orig, dir, objects, intrInfo)) {
-		if (intrInfo.hitObject->objectType == ObjectType::Mesh) {
-
-		}
-
+		//return Vec3f{ 1.0f };
+		/*if (intrInfo.hitObject->objectType == ObjectType::Mesh) {
+			const Mesh* mesh = dynamic_cast<const Mesh*>(intrInfo.hitObject);
+			AccelerationStructure ac = static_cast<Mesh*>()->accelStruct;
+		}*/
 		Vec3f hitColor = intrInfo.hitObject->color;
 		Vec3f hitNormal;
 		Vec2f hitTexCoordinates;
@@ -182,9 +183,9 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 
 	for (size_t y = y0; y < y1; y++) {
 		for (size_t x = 0; x < options.width; x++) {
-			if (x == 75 && y == 69) {
+			if (x == 350 && y == 100) {
 				// std::cout << "Now\n";
-				//frameBuffer[x + y * options.width] = { 1 };
+				frameBuffer[x + y * options.width] = { 1 };
 				//continue;
 			}
 			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;

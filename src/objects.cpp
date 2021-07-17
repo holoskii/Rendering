@@ -21,7 +21,7 @@ bool Mesh::intersectMesh(const Vec3f& orig, const Vec3f& dir, float& t0, const T
 
 void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const
 {
-#if 1
+#if 0
 	// vertex normal shading
 	hitNormal = ((triPtr->n_b * uv.x + triPtr->n_c * uv.y + triPtr->n_a * (1 - uv.x - uv.y)) / 3).normalize();
 #else
@@ -35,11 +35,111 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, c
 }
 
 
-AccelerationStructure::AccelerationStructure() {}
+AccelerationStructure::AccelerationStructure() 
+{
+	static int globalIndex = 0;
+	index = globalIndex++;
+}
 
 void AccelerationStructure::setTris(std::vector<Triangle> a_tris)
 {
-	tris = std::move(a_tris);
+	// no split
+	if (a_tris.size() < 1000) {
+
+		std::cout << this->index << ' ' << a_tris.size() << '\n';
+		tris = std::move(a_tris);
+		return;
+	}
+
+	int split = 1; // xyz split
+	Vec3f dim = bounds[1] - bounds[0];
+	if (dim.x > dim.y && dim.x > dim.z)
+		split = 0;
+	else if (dim.y > dim.z)
+		split = 1;
+	else
+		split = 2;
+	/*if (size.x > size.y && size.x > size.z)
+		split = 0;
+	else if (size.y > size.z)
+		split = 1;
+	else split = 1;*/
+	
+	if (split == 0) {
+		float avg = 0.0f;
+		for (const Triangle& tri : a_tris)
+			avg += tri.a.x + tri.b.x + tri.c.x;
+		avg /= 3.0f * a_tris.size();
+		std::vector<Triangle> trisLeft;
+		std::vector<Triangle> trisRight;
+		for (const Triangle& tri : a_tris) {
+			int leftBool = tri.a.x <= avg || tri.b.x <= avg || tri.c.x <= avg;
+			int rightBool = tri.a.x >= avg || tri.b.x >= avg || tri.c.x >= avg;
+			if (leftBool)
+				trisLeft.push_back(tri);
+			if (rightBool)
+				trisRight.push_back(tri);
+			//std::cout << leftBool << ' ' << rightBool << '\n';
+		}
+
+		// assert(trisLeft.size() != 0 && trisRight.size() != 0);
+		
+		left = new AccelerationStructure();
+		left->setBounds(bounds[0], Vec3f{ avg, bounds[1].y, bounds[1].z });
+		left->setTris(trisLeft);
+		right = new AccelerationStructure();
+		right->setBounds(Vec3f{ avg, bounds[0].y, bounds[0].z }, bounds[1]);
+		right->setTris(trisRight);
+	}
+	else if (split == 1) {
+		float avg = 0.0f;
+		for (const Triangle& tri : a_tris)
+			avg += tri.a.y + tri.b.y + tri.c.y;
+		avg /= 3.0f * a_tris.size();
+		std::vector<Triangle> trisLeft;
+		std::vector<Triangle> trisRight;
+		for (const Triangle& tri : a_tris) {
+			int leftBool = tri.a.y <= avg || tri.b.y <= avg || tri.c.y <= avg;
+			int rightBool = tri.a.y >= avg || tri.b.y >= avg || tri.c.y >= avg;
+			if (leftBool)
+				trisLeft.push_back(tri);
+			if (rightBool)
+				trisRight.push_back(tri);
+		}
+		left = new AccelerationStructure();
+		left->setBounds(bounds[0], Vec3f{ bounds[1].x, avg, bounds[1].z });
+		left->setTris(trisLeft);
+		right = new AccelerationStructure();
+		right->setBounds(Vec3f{ bounds[0].x, avg, bounds[0].z }, bounds[1]);
+		right->setTris(trisRight);
+	}
+	else if (split == 2) {
+
+		float avg = 0.0f;
+		for (const Triangle& tri : a_tris)
+			avg += tri.a.z + tri.b.z + tri.c.z;
+		avg /= 3.0f * a_tris.size();
+		std::vector<Triangle> trisLeft;
+		std::vector<Triangle> trisRight;
+		for (const Triangle& tri : a_tris) {
+			if (tri.a.z <= avg || tri.b.z <= avg || tri.c.z <= avg)
+				trisLeft.push_back(tri);
+			if (tri.a.z >= avg || tri.b.z >= avg || tri.c.z >= avg)
+				trisRight.push_back(tri);
+		}
+		left = new AccelerationStructure();
+		left->setBounds(bounds[0], Vec3f{ bounds[1].x, bounds[1].y, avg });
+		left->setTris(trisLeft);
+		right = new AccelerationStructure();
+		right->setBounds(Vec3f{ bounds[0].x, bounds[0].y, avg }, bounds[1]);
+		right->setTris(trisRight);
+	}
+	else {
+		assert(false);
+	}
+
+	// z split
+	
 }
 
 void AccelerationStructure::setBounds(const Vec3f& a, const Vec3f& b)
@@ -87,18 +187,47 @@ bool AccelerationStructure::intersectBox(const Vec3f& orig, const Vec3f& dir) co
 
 bool AccelerationStructure::intersectAccelStruct(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, Vec2f& uv) const
 {
-	if (!intersectBox(orig, dir)) return false;
+	if (index == 6) {
+		//std::cout << "here\n";
+	}
 
-	//const Triangle* tri = nullptr;
+	//if (tris.size() > 0 && index != 6) return false;
+	if (!this->intersectBox(orig, dir))
+		return false;
+	
+	if (index == 6) {
+		//std::cout << "here\n";
+	}
+
 	bool inter = false;
-	Vec2f tempuv;
+	float tempT;
+	Vec2f tempUV;
+	const Triangle* tempTriPtr;
 	t0 = std::numeric_limits<float>::max();
-	for (const Triangle& tri : tris) {
-		float t;
-		if (Triangle::rayTriangleIntersect(orig, dir, tri, t, tempuv) && t < t0) {
+	if (left != nullptr) {
+		assert(right != nullptr);	
+		if (left->intersectAccelStruct(orig, dir, tempT, tempTriPtr, tempUV) && tempT < t0) {
 			inter = true;
-			t0 = t;
-			uv = tempuv;
+			t0 = tempT;
+			uv = tempUV;
+			triPtr = tempTriPtr;
+		}
+		if (right->intersectAccelStruct(orig, dir, tempT, tempTriPtr, tempUV) && tempT < t0) {
+			inter = true;
+			t0 = tempT;
+			uv = tempUV;
+			triPtr = tempTriPtr;
+		}
+		
+		
+		return inter;
+	}
+	
+	for (const Triangle& tri : tris) {
+		if (Triangle::rayTriangleIntersect(orig, dir, tri, tempT, tempUV) && tempT < t0) {
+			inter = true;
+			t0 = tempT;
+			uv = tempUV;
 			triPtr = &tri;
 		}
 	}

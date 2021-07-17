@@ -5,6 +5,7 @@
 #include <memory>
 class Object;
 class Triangle;
+class AccelerationStructure;
 using ObjectVector = std::vector<std::unique_ptr<Object>>;
 enum class ObjectType { Object, Sphere, Plane, Mesh };
 enum class MaterialType { Diffuse, Reflective, Transparent, Phong };
@@ -65,7 +66,10 @@ public:
 
 	Vec3f a, b, c;
 	Vec3f n_a, n_b, n_c;
+
+	AccelerationStructure* ac = nullptr;
 };
+
 
 class AccelerationStructure
 {
@@ -78,9 +82,14 @@ public:
 	bool intersectAccelStruct(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, Vec2f& uv) const;
 	const Triangle& getTri(size_t index) const;
 
+
+	AccelerationStructure* left = nullptr;
+	AccelerationStructure* right = nullptr;
+	std::vector<Triangle> tris;
+	int index = 0;
 private:
 	Vec3f bounds[2];
-	std::vector<Triangle> tris;
+	
 };
 
 class Mesh : public Object
