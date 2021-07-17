@@ -57,11 +57,12 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
     if (!ifs.good()) return nullptr;
 
     Mesh* mesh = new Mesh();
+    mesh->accelStruct = new AccelerationStructure();
     std::string line;
     bool normalized = false;
     std::vector<Vec3f> vertexData;
     std::vector<Vec3f> normalData;
-    std::vector<Triangle> tris;
+    std::vector<const Triangle*>* tris = new std::vector<const Triangle*>;
     Vec3f min = { std::numeric_limits<float>::max() };
     Vec3f max = { std::numeric_limits<float>::min() };
 
@@ -109,7 +110,7 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
                     v.z = normSize.z * ((v.z - min.z) / range.z - 0.5f) + pos.z;
                 }
 
-                mesh->accelStruct.setBounds(pos - normSize / 2, pos + normSize / 2);
+                mesh->accelStruct->setBounds(pos - normSize / 2, pos + normSize / 2);
             }
 
             int slashCount = 0;
@@ -123,7 +124,7 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
                 while ((v = getUInt(ptr)) > 0)
                     vi.push_back(v);
                 for (size_t i = 1; i < vi.size() - 1; i++)
-                    tris.push_back(Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
+                    tris->push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
             }
             else if (slashCount % 2 == 0) {
                 std::vector<size_t> vi, ti, ni;
@@ -137,12 +138,12 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
                 }
                 if (ni.size() == 0) {
                     for (size_t i = 1; i < vi.size() - 1; i++)
-                        tris.push_back(Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
+                        tris->push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
                 }
                 else {
                     assert(ni.size() == vi.size());
                     for (size_t i = 1; i < vi.size() - 1; i++)
-                        tris.push_back(Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
+                        tris->push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
                             normalData.at(ni.at(0) - 1), normalData.at(ni.at(i) - 1), normalData.at(ni.at(i + 1) - 1)));
                 }
             }
@@ -151,8 +152,9 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
             }
         }
     } while (ifs.good());
+    ifs.close();
 
-    mesh->accelStruct.setTris(tris);
+    mesh->accelStruct->setTris(tris);
 
     return mesh;
 }

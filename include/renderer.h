@@ -35,7 +35,7 @@ class Scene
 {
 public:
 	bool sceneLoadSuccess = true;
-
+	
 	ObjectVector objects;
 	LightsVector lights;
 	Options options;

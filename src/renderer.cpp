@@ -195,9 +195,11 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 			finishedPixels.store(finishedPixels.load() + 1);
 		}
 #ifdef _DEBUG
+#ifdef _PROGRESS_OUTPUT
 		const float progressCoef = 100.0f / (options.width * options.height);
 		if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
-#endif
+#endif // _PROGRESS_OUTPUT
+#endif // _DEBUG
 	}
 	finishedWorkers.store(finishedWorkers.load() + 1);
 }
@@ -231,6 +233,7 @@ bool Scene::loadScene(const std::string& sceneName)
 
 			if (str[0] == '[') {
 				if (str.find("end") != std::string::npos) {
+					ifs.close();
 					return true;
 				}
 				assert(blockMap.find(str) != blockMap.end());
@@ -384,15 +387,16 @@ bool Scene::loadScene(const std::string& sceneName)
 int Scene::launchWorkers(Vec3f* frameBuffer)
 {
 	Timer t("Render scene");
-#ifndef _DEBUG
-	std::vector<std::thread*> threadPool;
+#ifdef _DEBUG
+	std::vector<std::unique_ptr<std::thread>> threadPool;
 	for (size_t i = 0; i < options.nWorkers; i++) {
 		size_t y0 = options.height / options.nWorkers * i;
 		size_t y1 = options.height / options.nWorkers * (i + 1);
 		if (i + 1 == options.nWorkers) y1 = options.height;
-		threadPool.push_back(new std::thread(&Scene::renderWorker, this, frameBuffer, y0, y1));
+		threadPool.push_back(std::unique_ptr<std::thread>(new std::thread(&Scene::renderWorker, this, frameBuffer, y0, y1)));
 	}
 
+#ifdef _PROGRESS_OUTPUT
 	while (finishedWorkers.load() != options.nWorkers) {
 		const float progressCoef = 100.0f / (options.width * options.height);
 		std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
@@ -405,7 +409,7 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
-
+#endif // _PROGRESS_OUTPUT
 	for (auto& t : threadPool)
 		t->join();
 #else
@@ -422,8 +426,9 @@ int Scene::render()
 	Vec3f* frameBuffer = new Vec3f[options.height * options.width];
 
 	launchWorkers(frameBuffer);
-
+#ifndef _NO_OUTPUT
 	savePPM(frameBuffer, options);
+#endif // _NO_OUTPUT
 	delete[] frameBuffer;
 
 #ifdef _STATS
