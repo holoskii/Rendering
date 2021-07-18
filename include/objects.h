@@ -8,6 +8,7 @@ class Object;
 class Sphere;
 class Plane;
 class Triangle;
+
 using ObjectVector = std::vector<std::unique_ptr<Object>>;
 enum class ObjectType { Object, Sphere, Plane, Mesh };
 enum class MaterialType { Diffuse, Reflective, Transparent, Phong };
@@ -62,17 +63,4 @@ public:
 		Vec3f& hitNormal, Vec2f& tex) const;
 
 	Vec3f normal;
-};
-
-class Triangle
-{
-public:
-	Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c);
-	Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, const Vec3f& a_n_a, 
-		const Vec3f& a_n_b, const Vec3f& a_n_c);
-	static bool rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir, const Triangle* triPtr, 
-		float& t, Vec2f& uv);
-
-	Vec3f a, b, c;
-	Vec3f n_a, n_b, n_c;
 };

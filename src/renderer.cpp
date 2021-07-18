@@ -176,15 +176,18 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector&
 
 void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 {
+#ifdef _DEBUG && _PROGRESS_OUTPUT
+	auto lastStat = std::chrono::high_resolution_clock::now();
+#endif // _DEBUG && _PROGRESS_OUTPUT
+
 	const Vec3f orig = { 0, 0, 0 };
 	const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
 	float imageAspectRatio = (options.width) / (float)options.height;
-
 	for (size_t y = y0; y < y1; y++) {
 		for (size_t x = 0; x < options.width; x++) {
 			if (x == 350 && y == 100) {
 				// std::cout << "Now\n";
-				frameBuffer[x + y * options.width] = { 1 };
+				//frameBuffer[x + y * options.width] = { 1 };
 				//continue;
 			}
 			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
@@ -193,12 +196,13 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 			frameBuffer[x + y * options.width] = Renderer::castRay(orig, dir, objects, lights, options, 0);
 			finishedPixels.store(finishedPixels.load() + 1);
 		}
-#ifdef _DEBUG
-#ifdef _PROGRESS_OUTPUT
-		const float progressCoef = 100.0f / (options.width * options.height);
-		if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
-#endif // _PROGRESS_OUTPUT
-#endif // _DEBUG
+#ifdef _DEBUG && _PROGRESS_OUTPUT
+		if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - lastStat).count() >= 1000ll) {
+			const float progressCoef = 100.0f / (options.width * options.height);
+			if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
+			lastStat = std::chrono::high_resolution_clock::now();
+		}
+#endif // _DEBUG && _PROGRESS_OUTPUT
 	}
 	finishedWorkers.store(finishedWorkers.load() + 1);
 }
@@ -328,7 +332,7 @@ bool Scene::loadScene(const std::string& sceneName)
 						Vec3f pos{ strToFloat(res[3]), strToFloat(res[4]), strToFloat(res[5]) };
 						Vec3f size{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
 						Vec3f color{ strToFloat(res[9]), strToFloat(res[10]), strToFloat(res[11]) };
-						object = loadOBJ(path, pos, size);
+						object = static_cast<Object*>(loadOBJ(path, pos, size));
 						object->color = color;
 						if (object == nullptr) {
 							std::cout << "Mesh " << path << " wasn't loaded\n";
@@ -386,19 +390,17 @@ bool Scene::loadScene(const std::string& sceneName)
 int Scene::launchWorkers(Vec3f* frameBuffer)
 {
 	Timer t("Render scene");
-#ifdef _DEBUG
+#ifndef _DEBUG
 	std::vector<std::unique_ptr<std::thread>> threadPool;
 	for (size_t i = 0; i < options.nWorkers; i++) {
 		size_t y0 = options.height / options.nWorkers * i;
 		size_t y1 = options.height / options.nWorkers * (i + 1);
 		if (i + 1 == options.nWorkers) y1 = options.height;
-		threadPool.push_back(std::unique_ptr<std::thread>(new std::thread(&Scene::renderWorker, this, frameBuffer, y0, y1)));
+		threadPool.push_back(std::make_unique<std::thread>(&Scene::renderWorker, this, frameBuffer, y0, y1));
 	}
 
 #ifdef _PROGRESS_OUTPUT
 	while (finishedWorkers.load() != options.nWorkers) {
-		const float progressCoef = 100.0f / (options.width * options.height);
-		std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
 		auto start = std::chrono::high_resolution_clock::now();
 		for (int i = 0; i < 100; i++) {
 			if (finishedWorkers.load() == options.nWorkers)
@@ -406,6 +408,10 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 			if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() >= 1000ll)
 				break;
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+		if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() >= 1000ll) {
+			const float progressCoef = 100.0f / (options.width * options.height);
+			std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
 		}
 	}
 #endif // _PROGRESS_OUTPUT

@@ -15,6 +15,7 @@ inline std::atomic<int> accelStructTests{ 0 };
 #include "geometry.h"
 #include "objects.h"
 #include "lights.h"
+#include "mesh.h"
 
 enum class RayType { PrimaryRay, ShadowRay };
 
