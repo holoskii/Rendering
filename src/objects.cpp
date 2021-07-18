@@ -11,11 +11,8 @@ Mesh::Mesh()
 Mesh::~Mesh()
 {
 	if (accelStruct) delete accelStruct;
-	if (allTris) {
-		for (const Triangle* tri : *allTris)
-			delete tri;
-		delete allTris;
-	}
+	for (const Triangle* tri : allTris)
+		delete tri;
 }
 
 bool Mesh::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const
@@ -53,9 +50,9 @@ AccelerationStructure::AccelerationStructure()
 
 AccelerationStructure::~AccelerationStructure()
 {
-	if (tris) delete tris;
-	if (left) delete left;
-	if (right) delete right;
+	if (tris != nullptr) delete tris;
+	if (left != nullptr) delete left;
+	if (right != nullptr) delete right;
 }
 
 void AccelerationStructure::setTris(std::vector<const Triangle*>* a_tris)
@@ -152,9 +149,7 @@ void AccelerationStructure::setTris(std::vector<const Triangle*>* a_tris)
 	else {
 		assert(false);
 	}
-
-	// z split
-	
+	delete a_tris;
 }
 
 void AccelerationStructure::setBounds(const Vec3f& a, const Vec3f& b)

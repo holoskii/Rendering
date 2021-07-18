@@ -101,6 +101,6 @@ public:
 	bool intersectMesh(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, Vec2f& uv) const;
 	void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const;
 
-	std::vector<const Triangle*>* allTris = nullptr;
+	std::vector<const Triangle*> allTris;
 	AccelerationStructure* accelStruct = nullptr;
 };
