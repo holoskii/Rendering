@@ -66,11 +66,9 @@ public:
 	static Vec3f refract(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction);
 	static float fresnel(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction);
 
-	static bool trace(const Vec3f& orig, const Vec3f& dir,
-		const ObjectVector& objects,
+	static bool trace(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects,
 		IntersectInfo& intrInfo, const RayType rayType = RayType::PrimaryRay);
 
-	static Vec3f castRay(const Vec3f& orig, const Vec3f& dir,
-		const ObjectVector& objects, const LightsVector& lights,
-		const Options& options, const int depth);
+	static Vec3f castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, 
+		const LightsVector& lights, const Options& options, const int depth);
 };

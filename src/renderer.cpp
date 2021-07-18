@@ -60,8 +60,7 @@ float Renderer::fresnel(const Vec3f& dir, const Vec3f& normal, const float& inde
 	return kr;
 }
 
-bool Renderer::trace(const Vec3f& orig, const Vec3f& dir,
-	const ObjectVector& objects,
+bool Renderer::trace(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects,
 	IntersectInfo& intrInfo, const RayType rayType)
 {
 	intrInfo.hitObject = nullptr;
@@ -93,9 +92,8 @@ bool Renderer::trace(const Vec3f& orig, const Vec3f& dir,
 	return (intrInfo.hitObject != nullptr);
 }
 
-Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir,
-	const ObjectVector& objects, const LightsVector& lights,
-	const Options& options, const int depth)
+Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, 
+	const LightsVector& lights,	const Options& options, const int depth)
 {
 	if (depth > options.maxDepth) return options.backgroundColor;
 	IntersectInfo intrInfo;
