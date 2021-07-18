@@ -154,7 +154,8 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
     } while (ifs.good());
     ifs.close();
 
-    mesh->accelStruct->setTris(tris);
+    mesh->allTris = tris;
+    mesh->accelStruct->setTris(mesh->allTris);
 
     return mesh;
 }
