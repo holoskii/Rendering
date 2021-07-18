@@ -3,7 +3,10 @@
 
 #include <vector>
 #include <memory>
+
 class Light;
+class DistantLight;
+class PointLight;
 using LightsVector = std::vector<std::unique_ptr<Light>>;
 enum class LightType { BaseLight, DistantLight, PointLight };
 

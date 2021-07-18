@@ -1,11 +1,12 @@
 #include "renderer.h"
-#include "timer.h"
-#include "util.h"
 
 #include <fstream>
 #include <chrono>
 #include <map>
 #include <thread>
+
+#include "timer.h"
+#include "util.h"
 
 Vec3f Renderer::reflect(const Vec3f& dir, const Vec3f& normal)
 {
@@ -436,6 +437,7 @@ int Scene::render()
 	#ifndef _NO_ACCEL_STRUCT
 		std::cout << "Acceleration structures tests: " << accelStructTests.load() << '\n';
 	#endif // _NO_ACCEL_STRUCT
+	
 #endif // _STATS
 
 	return 0;

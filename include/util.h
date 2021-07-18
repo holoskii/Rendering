@@ -1,11 +1,12 @@
 #pragma once
 
-#include "geometry.h"
-#include "renderer.h"
-
 #include <cmath>
 #include <sstream>
 #include <cassert>
+
+#include "geometry.h"
+#include "renderer.h"
+#include "mesh.h"
 
 constexpr float M_PI = 3.14159265358979323846f;
 

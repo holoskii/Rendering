@@ -7,6 +7,7 @@ class Scene;
 struct IntersectInfo;
 
 #ifdef _STATS
+inline std::atomic<int> triCopiesCount{ 0 };
 inline std::atomic<int> rayTriTests{ 0 };
 inline std::atomic<int> accelStructTests{ 0 };
 #endif

@@ -1,6 +1,4 @@
 #include "util.h"
-#include "timer.h"
-#include "renderer.h"
 
 #define NOMINMAX
 #include "windows.h"
@@ -10,9 +8,12 @@
 #include <map>
 #include <string>
 
+#include "timer.h"
+#include "renderer.h"
+
 int savePPM(Vec3f* frameBuffer, const Options& options)
 {
-    Timer t("Save image");
+    // Timer t("Save image");
 
     std::string path = options.imagePath + "\\" + options.imageName;
     std::ofstream of(path, std::ios::out | std::ios::binary);
@@ -158,6 +159,8 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
     for (const Triangle*& tri : *tris)
         mesh->allTris.push_back(tri);
     mesh->accelStruct->setTris(tris);
-
+#ifdef _STATS
+    std::cout << "Triangle copies: " << triCopiesCount.load() << ", triangles in mesh: " << mesh->allTris.size() << '\n';
+#endif // _STATS
     return mesh;
 }
