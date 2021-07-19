@@ -8,6 +8,8 @@
 #include <map>
 #include <string>
 
+#include "options.h"
+#include "stats.h"
 #include "timer.h"
 #include "renderer.h"
 
@@ -26,7 +28,7 @@ int savePPM(Vec3f* frameBuffer, const Options& options)
     char* data = new char[options.height * options.width * 3];
     char* dataPtr = data;
     for (int i = 0; i < options.height * options.width; i++)
-        for (int j = 0; j < 3; j++)
+        for (unsigned char j = 0; j < 3; j++)
             *dataPtr++ = static_cast<char>(clamp(0.0f, 1.0f, frameBuffer[i][j]) * 255);
 
     of << "P6\n" << std::to_string(options.width) << " " << std::to_string(options.height) << "\n" << std::to_string(255) << "\n";
@@ -41,7 +43,7 @@ int savePPM(Vec3f* frameBuffer, const Options& options)
     return 0;
 }
 
-Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
+Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, const Options& options)
 {
     auto getUInt = [](const char* & ptr)
     {
@@ -58,7 +60,7 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
     if (!ifs.good()) return nullptr;
 
     Mesh* mesh = new Mesh();
-    mesh->ac = std::make_unique<AccelerationStructure>(0);
+    mesh->ac = std::make_unique<AccelerationStructure>();
     std::string line;
     bool normalized = false;
     std::vector<Vec3f> vertexData;
@@ -158,9 +160,191 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size)
     mesh->allTris.reserve(tris.size());
     for (const Triangle* tri : tris)
         mesh->allTris.push_back(tri);
-    mesh->ac->setTris(tris);
+    mesh->ac->setTris(tris, 1, options);
 #ifdef _STATS
-    std::cout << "Triangle copies: " << triCopiesCount.load() << ", triangles in mesh: " << mesh->allTris.size() << '\n';
+    stats::meshCount.store(stats::meshCount.load() + mesh->allTris.size());
 #endif // _STATS
     return mesh;
+}
+
+bool loadScene(Scene& scene, Options& options, const std::string& sceneName)
+{
+	std::cout << "Loading scene " << sceneName << '\n';
+	enum class BlockType { None, Options, Light, Object };
+	std::map<std::string, BlockType> blockMap;
+	blockMap["[options]"] = BlockType::Options;
+	blockMap["[light]"] = BlockType::Light;
+	blockMap["[object]"] = BlockType::Object;
+	BlockType blockType = BlockType::None;
+
+	std::string scenePath = options.imagePath + "\\" + sceneName;
+	std::string str;
+	std::ifstream ifs(scenePath, std::ifstream::in);
+	std::getline(ifs, str);
+
+	while (ifs.good()) {
+		// pasrse everything here
+		if (str.length() != 0) {
+			if (str.find('#') != std::string::npos)
+				str.erase(str.find('#'));
+			if (str.length() == 0)
+				continue;
+
+			if (str[0] == '[') {
+				if (str.find("end") != std::string::npos) {
+					ifs.close();
+					return true;
+				}
+				assert(blockMap.find(str) != blockMap.end());
+				blockType = blockMap[str];
+			}
+			else {
+				if (blockType == BlockType::Options) {
+					assert(str.find('=') != std::string::npos);
+					std::string_view strv(str.c_str(), str.find('='));
+					if (strv.find("width") != std::string::npos)
+						options.width = strToInt(str.substr(str.find('=') + 1));
+					else if (strv.find("height") != std::string::npos)
+						options.height = strToInt(str.substr(str.find('=') + 1));
+					else if (strv.find("fov") != std::string::npos)
+						options.fov = strToFloat(str.substr(str.find('=') + 1));
+					else if (strv.find("image_name") != std::string::npos) {
+						std::string name = str.substr(str.find('=') + 1);
+						if (name[0] == '\"') name.erase(0, 1);
+						if (name[name.length() - 1] == '\"') name.erase(name.length() - 1, 1);
+						options.imageName = name;
+					}
+					else if (strv.find("n_workers=") != std::string::npos)
+						options.nWorkers = strToInt(str.substr(str.find('=') + 1));
+					else if (strv.find("max_ray_depth") != std::string::npos)
+						options.maxRayDepth = strToInt(str.substr(str.find('=') + 1));
+					else if (strv.find("ac_max_depth") != std::string::npos)
+						options.maxDepthAccelStruct = strToInt(str.substr(str.find('=') + 1));
+					else if (strv.find("ac_min_batch") != std::string::npos)
+						options.minBatchSizeAccelStruct = strToInt(str.substr(str.find('=') + 1));
+				}
+				else if (blockType == BlockType::Light) {
+					options::combineWithGlobal(options);
+					std::vector<std::string> res;
+					std::stringstream lineStream(str);
+					std::string cell;
+					while (std::getline(lineStream, cell, ','))
+						res.push_back(cell);
+
+					if (res.size() < 9) {
+						std::cout << "Short light string\n";
+						break;
+					}
+
+					if (res[1].find("distant_light") != std::string::npos) {
+						Vec3f dir{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
+						Vec3f color{ strToFloat(res[5]), strToFloat(res[6]), strToFloat(res[7]) };
+						DistantLight* light = new DistantLight(dir, color, strToFloat(res[8]));
+						scene.lights.emplace_back(std::unique_ptr<Light>(light));
+					}
+					else if (res[1].find("point_light") != std::string::npos) {
+						Vec3f pos{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
+						Vec3f color{ strToFloat(res[5]), strToFloat(res[6]), strToFloat(res[7]) };
+						PointLight* light = new PointLight(pos, color, strToFloat(res[8]));
+						scene.lights.emplace_back(std::unique_ptr<Light>(light));
+					}
+					else {
+						std::cout << "Unknown light type\n";
+						break;
+					}
+				}
+				else if (blockType == BlockType::Object) {
+					options::combineWithGlobal(options);
+					std::vector<std::string> res;
+					std::stringstream lineStream(str);
+					std::string cell;
+					while (std::getline(lineStream, cell, ',')) {
+						cell.erase(std::remove(cell.begin(), cell.end(), '\t'), cell.end());
+						res.emplace_back(cell);
+					}
+					if (res.size() < 3) {
+						std::cout << "Short object string\n";
+						break;
+					}
+
+					Object* object;
+					size_t i = 0;
+					if (res[1].find("sphere") != std::string::npos) {
+						Vec3f pos{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
+						Vec3f color{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
+						object = new Sphere(pos, strToFloat(res[5]), color);
+						i = 9;
+					}
+					else if (res[1].find("plane") != std::string::npos) {
+						if (res.size() < 11) {
+							std::cout << "Short plane string\n";
+							break;
+						}
+						Vec3f pos{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
+						Vec3f normal{ strToFloat(res[5]), strToFloat(res[6]), strToFloat(res[7]) };
+						Vec3f color{ strToFloat(res[8]), strToFloat(res[9]), strToFloat(res[10]) };
+						object = new Plane(pos, normal, color);
+						i = 11;
+					}
+					else if (res[1].find("mesh") != std::string::npos) {
+						std::string path = res[2];
+						if (path[path.length() - 1] == '\"') path.erase(path.length() - 1, 1);
+						if (path[0] == '\"') path.erase(0, 1);
+						path = options.imagePath + "\\" + path;
+						Vec3f pos{ strToFloat(res[3]), strToFloat(res[4]), strToFloat(res[5]) };
+						Vec3f size{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
+						Vec3f color{ strToFloat(res[9]), strToFloat(res[10]), strToFloat(res[11]) };
+						object = static_cast<Object*>(loadOBJ(path, pos, size, options));
+						object->color = color;
+						if (object == nullptr) {
+							std::cout << "Mesh " << path << " wasn't loaded\n";
+							exit(-1);
+						}
+						i = 12;
+					}
+					else {
+						std::cout << "Unknown object type\n";
+						break;
+					}
+
+					if (i < res.size()) {
+						std::string pat = res[i];
+						if (pat.find("none") != std::string::npos)
+							object->pattern = PatternType::None;
+						else if (pat.find("stripped") != std::string::npos)
+							object->pattern = PatternType::Stripped;
+						else if (pat.find("shaded_chessboard") != std::string::npos)
+							object->pattern = PatternType::ShadedChessboard;
+						else if (pat.find("chessboard") != std::string::npos)
+							object->pattern = PatternType::Chessboard;
+						i++;
+					}
+
+					if (i < res.size()) {
+						if (res[i].find("reflective") != std::string::npos)
+							object->materialType = MaterialType::Reflective;
+						else if (res[i].find("transparent") != std::string::npos)
+							object->materialType = MaterialType::Transparent;
+						else if (res[i].find("phong") != std::string::npos) {
+							if (i + 4 >= res.size()) {
+								std::cout << "Too short for phong\n";
+							}
+							else {
+								object->materialType = MaterialType::Phong;
+								object->ambient = strToFloat(res[i + 1]);
+								object->difuse = strToFloat(res[i + 2]);
+								object->specular = strToFloat(res[i + 3]);
+								object->nSpecular = strToFloat(res[i + 4]);
+							}
+						}
+					}
+
+					scene.objects.emplace_back(std::unique_ptr<Object>(object));
+				}
+			}
+		}
+		std::getline(ifs, str);
+	}
+	std::cout << "Scene wasn't loaded\n";
+	return false;
 }

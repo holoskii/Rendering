@@ -45,4 +45,6 @@ inline float strToFloat(const std::string& str)
 
 int savePPM(Vec3f* frameBuffer, const Options& options);
 
-Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size);
+Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, const Options& options);
+
+bool loadScene(Scene& scene, Options& options, const std::string& sceneName);

@@ -9,6 +9,7 @@ class Triangle;
 #include <vector>
 #include "objects.h"
 #include "geometry.h"
+#include "options.h"
 
 class Triangle
 {
@@ -22,7 +23,6 @@ public:
 	Vec3f a, b, c;
 	Vec3f n_a, n_b, n_c;
 };
-
 
 class Mesh : public Object
 {
@@ -43,17 +43,16 @@ public:
 class AccelerationStructure
 {
 public:
-	AccelerationStructure(int a_depth = 0);
+	AccelerationStructure();
 	~AccelerationStructure();
 
 	void setBounds(const Vec3f& a, const Vec3f& b);
-	void setTris(std::vector<const Triangle*>& a_tris);
+	void setTris(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options);
 	bool intersectBox(const Vec3f& orig, const Vec3f& dir) const;
 	bool intersectAccelStruct(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, Vec2f& uv) const;
 
 	std::unique_ptr<AccelerationStructure> left;
 	std::unique_ptr<AccelerationStructure> right;
 	std::vector<const Triangle*> tris;
-	int depth = 0;
 	Vec3f bounds[2];
 };

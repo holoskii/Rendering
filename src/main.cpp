@@ -2,5 +2,6 @@
 
 int main()
 {
-	return Scene("scenes\\v0.scene").render();
+	Scene("scenes\\v0.scene").render();
+	// test_ac("scenes\\v0.scene");
 }

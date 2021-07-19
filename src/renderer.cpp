@@ -5,7 +5,9 @@
 #include <map>
 #include <thread>
 
+#include "stats.h"
 #include "timer.h"
+#include "options.h"
 #include "util.h"
 
 Vec3f Renderer::reflect(const Vec3f& dir, const Vec3f& normal)
@@ -72,7 +74,6 @@ bool Renderer::trace(const Vec3f& orig, const Vec3f& dir, const ObjectVector& ob
 		const Triangle* ptr = nullptr;
 		Vec2f uv;
 
-		bool intersect = false;
 		if ((*i).get()->objectType == ObjectType::Mesh) {
 			if (dynamic_cast<Mesh*>((*i).get())->intersectMesh(orig, dir, tNear, ptr, uv) && tNear < intrInfo.tNear) {
 				intrInfo.hitObject = (*i).get();
@@ -95,7 +96,7 @@ bool Renderer::trace(const Vec3f& orig, const Vec3f& dir, const ObjectVector& ob
 Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, 
 	const LightsVector& lights,	const Options& options, const int depth)
 {
-	if (depth > options.maxDepth) return options.backgroundColor;
+	if (depth > options.maxRayDepth) return options.backgroundColor;
 	IntersectInfo intrInfo;
 	if (trace(orig, dir, objects, intrInfo)) {
 		//return Vec3f{ 1.0f };
@@ -176,8 +177,10 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector&
 
 void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 {
-#ifdef _DEBUG && _PROGRESS_OUTPUT
+#ifdef _DEBUG
+#ifdef _PROGRESS_OUTPUT
 	auto lastStat = std::chrono::high_resolution_clock::now();
+#endif // _PROGRESS_OUTPUT
 #endif // _DEBUG && _PROGRESS_OUTPUT
 
 	const Vec3f orig = { 0, 0, 0 };
@@ -196,12 +199,14 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 			frameBuffer[x + y * options.width] = Renderer::castRay(orig, dir, objects, lights, options, 0);
 			finishedPixels.store(finishedPixels.load() + 1);
 		}
-#ifdef _DEBUG && _PROGRESS_OUTPUT
+#ifdef _DEBUG
+#ifdef _PROGRESS_OUTPUT
 		if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - lastStat).count() >= 1000ll) {
 			const float progressCoef = 100.0f / (options.width * options.height);
 			if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
 			lastStat = std::chrono::high_resolution_clock::now();
 		}
+#endif // _PROGRESS_OUTPUT
 #endif // _DEBUG && _PROGRESS_OUTPUT
 	}
 	finishedWorkers.store(finishedWorkers.load() + 1);
@@ -209,182 +214,7 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 
 Scene::Scene(const std::string& sceneName)
 {
-	sceneLoadSuccess = loadScene(sceneName);
-}
-
-bool Scene::loadScene(const std::string& sceneName)
-{
-	enum class BlockType { None, Options, Light, Object };
-	std::map<std::string, BlockType> blockMap;
-	blockMap["[options]"] = BlockType::Options;
-	blockMap["[light]"] = BlockType::Light;
-	blockMap["[object]"] = BlockType::Object;
-	BlockType blockType = BlockType::None;
-
-	std::string scenePath = options.imagePath + "\\" + sceneName;
-	std::string str;
-	std::ifstream ifs(scenePath, std::ifstream::in);
-	std::getline(ifs, str);
-
-	while (ifs.good()) {
-		// pasrse everything here
-		if (str.length() != 0) {
-			if (str.find('#') != std::string::npos)
-				str.erase(str.find('#'));
-			if (str.length() == 0)
-				continue;
-
-			if (str[0] == '[') {
-				if (str.find("end") != std::string::npos) {
-					ifs.close();
-					return true;
-				}
-				assert(blockMap.find(str) != blockMap.end());
-				blockType = blockMap[str];
-			}
-			else {
-				if (blockType == BlockType::Options) {
-					assert(str.find('=') != std::string::npos);
-					std::string_view strv(str.c_str(), str.find('='));
-					if (strv.find("width") != std::string::npos)
-						options.width = strToInt(str.substr(str.find('=') + 1));
-					else if (strv.find("height") != std::string::npos)
-						options.height = strToInt(str.substr(str.find('=') + 1));
-					else if (strv.find("fov") != std::string::npos)
-						options.fov = strToFloat(str.substr(str.find('=') + 1));
-					else if (strv.find("n_workers") != std::string::npos)
-						options.nWorkers = strToInt(str.substr(str.find('=') + 1));
-					else if (strv.find("image_name") != std::string::npos) {
-						std::string name = str.substr(str.find('=') + 1);
-						if (name[0] == '\"') name.erase(0, 1);
-						if (name[name.length() - 1] == '\"') name.erase(name.length() - 1, 1);
-						options.imageName = name;
-					}
-					else if (strv.find("max_depth") != std::string::npos)
-						options.maxDepth = strToInt(str.substr(str.find('=') + 1));
-				}
-				else if (blockType == BlockType::Light) {
-					std::vector<std::string> res;
-					std::stringstream lineStream(str);
-					std::string cell;
-					while (std::getline(lineStream, cell, ','))
-						res.push_back(cell);
-
-					if (res.size() < 9) {
-						std::cout << "Short light string\n";
-						break;
-					}
-
-					if (res[1].find("distant_light") != std::string::npos) {
-						Vec3f dir{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
-						Vec3f color{ strToFloat(res[5]), strToFloat(res[6]), strToFloat(res[7]) };
-						DistantLight* light = new DistantLight(dir, color, strToFloat(res[8]));
-						lights.emplace_back(std::unique_ptr<Light>(light));
-					}
-					else if (res[1].find("point_light") != std::string::npos) {
-						Vec3f pos{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
-						Vec3f color{ strToFloat(res[5]), strToFloat(res[6]), strToFloat(res[7]) };
-						PointLight* light = new PointLight(pos, color, strToFloat(res[8]));
-						lights.emplace_back(std::unique_ptr<Light>(light));
-					}
-					else {
-						std::cout << "Unknown light type\n";
-						break;
-					}
-				}
-				else if (blockType == BlockType::Object) {
-					std::vector<std::string> res;
-					std::stringstream lineStream(str);
-					std::string cell;
-					while (std::getline(lineStream, cell, ',')) {
-						cell.erase(std::remove(cell.begin(), cell.end(), '\t'), cell.end());
-						res.emplace_back(cell);
-					}
-					if (res.size() < 3) {
-						std::cout << "Short object string\n";
-						break;
-					}
-
-					Object* object;
-					size_t i = 0;
-					if (res[1].find("sphere") != std::string::npos) {
-						Vec3f pos{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
-						Vec3f color{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
-						object = new Sphere(pos, strToFloat(res[5]), color);
-						i = 9;
-					}
-					else if (res[1].find("plane") != std::string::npos) {
-						if (res.size() < 11) {
-							std::cout << "Short plane string\n";
-							break;
-						}
-						Vec3f pos{ strToFloat(res[2]), strToFloat(res[3]), strToFloat(res[4]) };
-						Vec3f normal{ strToFloat(res[5]), strToFloat(res[6]), strToFloat(res[7]) };
-						Vec3f color{ strToFloat(res[8]), strToFloat(res[9]), strToFloat(res[10]) };
-						object = new Plane(pos, normal, color);
-						i = 11;
-					}
-					else if (res[1].find("mesh") != std::string::npos) {
-						std::string path = res[2];
-						if (path[path.length() - 1] == '\"') path.erase(path.length() - 1, 1);
-						if (path[0] == '\"') path.erase(0, 1);
-						path = options.imagePath + "\\" + path;
-						Vec3f pos{ strToFloat(res[3]), strToFloat(res[4]), strToFloat(res[5]) };
-						Vec3f size{ strToFloat(res[6]), strToFloat(res[7]), strToFloat(res[8]) };
-						Vec3f color{ strToFloat(res[9]), strToFloat(res[10]), strToFloat(res[11]) };
-						object = static_cast<Object*>(loadOBJ(path, pos, size));
-						object->color = color;
-						if (object == nullptr) {
-							std::cout << "Mesh " << path << " wasn't loaded\n";
-							exit(-1);
-						}
-						i = 12;
-					}
-					else {
-						std::cout << "Unknown object type\n";
-						break;
-					}
-
-					if (i < res.size()) {
-						std::string pat = res[i];
-						if (pat.find("none") != std::string::npos)
-							object->pattern = PatternType::None;
-						else if (pat.find("stripped") != std::string::npos)
-							object->pattern = PatternType::Stripped;
-						else if (pat.find("shaded_chessboard") != std::string::npos)
-							object->pattern = PatternType::ShadedChessboard;
-						else if (pat.find("chessboard") != std::string::npos)
-							object->pattern = PatternType::Chessboard;
-						i++;
-					}
-
-					if (i < res.size()) {
-						if (res[i].find("reflective") != std::string::npos)
-							object->materialType = MaterialType::Reflective;
-						else if (res[i].find("transparent") != std::string::npos)
-							object->materialType = MaterialType::Transparent;
-						else if (res[i].find("phong") != std::string::npos) {
-							if (i + 4 >= res.size()) {
-								std::cout << "Too short for phong\n";
-							}
-							else {
-								object->materialType = MaterialType::Phong;
-								object->ambient = strToFloat(res[i + 1]);
-								object->difuse = strToFloat(res[i + 2]);
-								object->specular = strToFloat(res[i + 3]);
-								object->nSpecular = strToFloat(res[i + 4]);
-							}
-						}
-					}
-
-					objects.emplace_back(std::unique_ptr<Object>(object));
-				}
-			}
-		}
-		std::getline(ifs, str);
-	}
-	std::cout << "Scene wasn't loaded\n";
-	return false;
+	sceneLoadSuccess = loadScene(*this, this->options, sceneName);
 }
 
 int Scene::launchWorkers(Vec3f* frameBuffer)
@@ -415,8 +245,8 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 		}
 	}
 #endif // _PROGRESS_OUTPUT
-	for (auto& t : threadPool)
-		t->join();
+	for (auto& thread : threadPool)
+		thread->join();
 #else
 	renderWorker(frameBuffer, 0, options.height);
 #endif
@@ -426,7 +256,6 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 int Scene::render()
 {
 	if (!sceneLoadSuccess) return -1;
-
 	Timer t("Total time");
 	Vec3f* frameBuffer = new Vec3f[options.height * options.width];
 
@@ -437,12 +266,9 @@ int Scene::render()
 	delete[] frameBuffer;
 
 #ifdef _STATS
-	std::cout << "Ray triangle tests: " << rayTriTests.load() << '\n';
-	#ifndef _NO_ACCEL_STRUCT
-		std::cout << "Acceleration structures tests: " << accelStructTests.load() << '\n';
-	#endif // _NO_ACCEL_STRUCT
-	
+	stats::printStats();
 #endif // _STATS
 
-	return 0;
+	std::cout << '\n';
+	return t.stop();
 }

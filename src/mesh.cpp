@@ -1,9 +1,11 @@
 #include "mesh.h"
-#include "renderer.h"
 
 #include <cassert>
 #include <tuple>
 #include <queue>
+
+#include "stats.h"
+#include "options.h"
 
 Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c)
 	: a(a_a), b(a_b), c(a_c)
@@ -24,81 +26,27 @@ bool Triangle::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir, const T
 	float& t, Vec2f& uv)
 {
 #ifdef _STATS
-	rayTriTests.store(rayTriTests.load() + 1);
+	stats::rayTriTests.store(stats::rayTriTests.load() + 1);
 #endif // _STATS
 	const Vec3f& v0 = triPtr->a;
 	const Vec3f& v1 = triPtr->b;
 	const Vec3f& v2 = triPtr->c;
-#if 0
-	// compute plane's normal
-	Vec3f v0v1 = ;
-	Vec3f v0v2 = ;
-	// no need to normalize
-	Vec3f N = (v1 - v0).crossProduct(v2 - v0); // N
-	//Vec3f normal = (tri.n_a + tri.n_b + tri.n_c).normalize();
-	// std::cout << N << " " << normal << '\n';
-
-
-	float area2 = N.length();
-
-
-	// Step 1: finding P
-
-	// check if ray and plane are parallel ?
-	float NdotRayDirection = N.dotProduct(dir);
-	if (fabs(NdotRayDirection) < 1e-8) // almost 0 
-		return false; // they are parallel so they don't intersect ! 
-
-	// compute d parameter using equation 2
-	float d = N.dotProduct(v0);
-
-	// compute t (equation 3)
-	t = (N.dotProduct(orig) + d) / NdotRayDirection;
-	// check if the triangle is in behind the ray
-	if (t < 0) return false; // the triangle is behind 
-
-	// compute the intersection point using equation 1
-	Vec3f P = orig + t * dir;
-
-	// Step 2: inside-outside test
-	Vec3f C; // vector perpendicular to triangle's plane 
-
-	// edge 0
-	Vec3f edge0 = v1 - v0;
-	Vec3f vp0 = P - v0;
-	C = edge0.crossProduct(vp0);
-	if (N.dotProduct(C) < 0) return false; // P is on the right side 
-
-	// edge 1
-	Vec3f edge1 = v2 - v1;
-	Vec3f vp1 = P - v1;
-	C = edge1.crossProduct(vp1);
-	if (N.dotProduct(C) < 0)  return false; // P is on the right side 
-
-	// edge 2
-	Vec3f edge2 = v0 - v2;
-	Vec3f vp2 = P - v2;
-	C = edge2.crossProduct(vp2);
-	if (N.dotProduct(C) < 0) return false; // P is on the right side; 
-
-	return true; // this ray hits the triangle 
-#else
+	// Vec3f N = (v1 - v0).crossProduct(v2 - v0); // normal
+	
 	float u, v;
 	Vec3f v0v1 = v1 - v0;
 	Vec3f v0v2 = v2 - v0;
 	Vec3f pvec = dir.crossProduct(v0v2);
 	float det = v0v1.dotProduct(pvec);
 
-	// backface culling
-	// if (det < 1e-8) return false;
+#ifdef _BACKFACE_CULLING
+	if (det < 1e-8) return false;
+#endif // _BACKFACE_CULLING
 
-	// ray and triangle are parallel if det is close to 0
 	if (fabs(det) < 1e-8) return false;
 
 	float invDet = 1 / det;
-
 	Vec3f tvec = orig - v0;
-
 	u = tvec.dotProduct(pvec) * invDet;
 	if (u < 0 || u > 1) return false;
 
@@ -111,7 +59,6 @@ bool Triangle::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir, const T
 
 	uv.x = u; uv.y = v;
 	return true;
-#endif
 }
 
 
@@ -155,16 +102,28 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, c
 }
 
 
-AccelerationStructure::AccelerationStructure(int a_depth)
-	: depth(a_depth) {}
+AccelerationStructure::AccelerationStructure()
+{
+#ifdef _STATS
+	stats::acCount.store(stats::acCount.load() + 1);
+#endif // _STATS
+}
 
 AccelerationStructure::~AccelerationStructure(){}
 
-void AccelerationStructure::setTris(std::vector<const Triangle*>& a_tris)
+void AccelerationStructure::setTris(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options)
 {
 #ifdef _NO_ACCEL_STRUCT
 	tris = a_tris;
 #endif // _NO_ACCEL_STRUCT
+	if (a_depth >= options.maxDepthAccelStruct) {
+#ifdef _STATS
+		stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
+#endif // _STATS
+		//std::cout << "depth " << a_depth << '\n';
+		tris = a_tris;
+		return;
+	}
 
 	using Pair = std::pair<std::vector<const Triangle*>*, AccelerationStructure*>;
 	std::queue<Pair> queue;
@@ -177,7 +136,11 @@ void AccelerationStructure::setTris(std::vector<const Triangle*>& a_tris)
 		vec = queue.front().first;
 		ac = queue.front().second;
 		queue.pop();
-		if (vec->size() < 10 || ac->depth > 10) {
+		if (vec->size() < options.minBatchSizeAccelStruct || a_depth > options.maxDepthAccelStruct) {
+#ifdef _STATS
+			stats::triCopiesCount.store(stats::triCopiesCount.load() + vec->size());
+#endif // _STATS
+			//std::cout << "depth " << a_depth << '\n';
 			ac->tris = *vec;
 			continue;
 		}
@@ -232,28 +195,28 @@ void AccelerationStructure::setTris(std::vector<const Triangle*>& a_tris)
 		}
 
 		if (split == 0) {
-			left = std::make_unique<AccelerationStructure>(ac->depth + 1);
+			left = std::make_unique<AccelerationStructure>();
 			left->setBounds(bounds[0], Vec3f{ avg, bounds[1].y, bounds[1].z });
-			left->setTris(trisLeft);
-			right = std::make_unique<AccelerationStructure>(ac->depth + 1);
+			left->setTris(trisLeft, a_depth + 1, options);
+			right = std::make_unique<AccelerationStructure>();
 			right->setBounds(Vec3f{ avg, bounds[0].y, bounds[0].z }, bounds[1]);
-			right->setTris(trisRight);
+			right->setTris(trisRight, a_depth + 1, options);
 		}
 		else if (split == 1) {
-			left = std::make_unique<AccelerationStructure>(ac->depth + 1);
+			left = std::make_unique<AccelerationStructure>();
 			left->setBounds(bounds[0], Vec3f{ bounds[1].x, avg, bounds[1].z });
-			left->setTris(trisLeft);
-			right = std::make_unique<AccelerationStructure>(ac->depth + 1);
+			left->setTris(trisLeft, a_depth + 1, options);
+			right = std::make_unique<AccelerationStructure>();
 			right->setBounds(Vec3f{ bounds[0].x, avg, bounds[0].z }, bounds[1]);
-			right->setTris(trisRight);
+			right->setTris(trisRight, a_depth + 1, options);
 		}
 		else {
-			left = std::make_unique<AccelerationStructure>(ac->depth + 1);
+			left = std::make_unique<AccelerationStructure>();
 			left->setBounds(bounds[0], Vec3f{ bounds[1].x, bounds[1].y, avg });
-			left->setTris(trisLeft);
-			right = std::make_unique<AccelerationStructure>(ac->depth + 1);
+			left->setTris(trisLeft, a_depth + 1, options);
+			right = std::make_unique<AccelerationStructure>();
 			right->setBounds(Vec3f{ bounds[0].x, bounds[0].y, avg }, bounds[1]);
-			right->setTris(trisRight);
+			right->setTris(trisRight, a_depth + 1, options);
 		}
 	}
 }
@@ -270,7 +233,7 @@ bool AccelerationStructure::intersectBox(const Vec3f& orig, const Vec3f& dir) co
 	return true;
 #endif // _NO_ACCEL_STRUCT
 #ifdef _STATS
-	accelStructTests.store(accelStructTests.load() + 1);
+	stats::accelStructTests.store(stats::accelStructTests.load() + 1);
 #endif // _STATS
 	const Vec3f invdir = 1 / dir;
 	const int sign[3] = { (invdir.x < 0), (invdir.y < 0), (invdir.z < 0) };

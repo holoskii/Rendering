@@ -20,13 +20,14 @@ public:
 		stop();
 	}
 
-	void stop()
+	long long stop()
 	{
 		if (!running)
-			return;
+			return 0;
 		auto stopTime = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count();
+		long long duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count();
 		std::cout << name << " \t" << duration << " ms" << std::endl;
+		return duration;
 	}
 
 private:
