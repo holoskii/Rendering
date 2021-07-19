@@ -111,114 +111,83 @@ AccelerationStructure::AccelerationStructure()
 
 AccelerationStructure::~AccelerationStructure(){}
 
-void AccelerationStructure::setTris(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options)
+void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options)
 {
 #ifdef _NO_ACCEL_STRUCT
 	tris = a_tris;
 #endif // _NO_ACCEL_STRUCT
-	if (a_depth >= options.maxDepthAccelStruct) {
+
+	if (a_tris.size() < options.minBatchSizeAccelStruct || a_depth >= options.maxDepthAccelStruct) {
 #ifdef _STATS
-		stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
+		stats::triCopiesCount.store(stats::triCopiesCount.load() + vec->size());
 #endif // _STATS
-		//std::cout << "depth " << a_depth << '\n';
+		// std::cout << a_depth << ' ' << a_tris.size() << '\n';
 		tris = a_tris;
 		return;
 	}
 
-	using Pair = std::pair<std::vector<const Triangle*>*, AccelerationStructure*>;
-	std::queue<Pair> queue;
-	queue.push(Pair(&a_tris, this));
+	int split; // xyz split
+	Vec3f dim = bounds[1] - bounds[0];
+	if (dim.x > dim.y && dim.x > dim.z) split = 0;
+	else if (dim.y > dim.z) split = 1;
+	else split = 2;
+	float avg = 0.0f;
+	std::vector<const Triangle*> trisLeft;
+	std::vector<const Triangle*> trisRight;
 
-	std::vector<const Triangle*>* vec;
-	AccelerationStructure* ac;
-
-	while (!queue.empty()) {
-		vec = queue.front().first;
-		ac = queue.front().second;
-		queue.pop();
-		if (vec->size() < options.minBatchSizeAccelStruct || a_depth > options.maxDepthAccelStruct) {
-#ifdef _STATS
-			stats::triCopiesCount.store(stats::triCopiesCount.load() + vec->size());
-#endif // _STATS
-			//std::cout << "depth " << a_depth << '\n';
-			ac->tris = *vec;
-			continue;
-		}
-
-		int split; // xyz split
-		Vec3f dim = bounds[1] - bounds[0];
-		if (dim.x > dim.y && dim.x > dim.z)
-			split = 0;
-		else if (dim.y > dim.z)
-			split = 1;
-		else
-			split = 2;
-		float avg = 0.0f;
-		std::vector<const Triangle*> trisLeft;
-		std::vector<const Triangle*> trisRight;
-
-		if (split == 0) {
-			for (const Triangle* const tri : a_tris)
-				avg += tri->a.x + tri->b.x + tri->c.x;
-			avg /= 3.0f * a_tris.size();
-			for (const Triangle* const tri : a_tris) {
-				if (tri->a.x <= avg || tri->b.x <= avg || tri->c.x <= avg)
-					trisLeft.push_back(tri);
-				if (tri->a.x >= avg || tri->b.x >= avg || tri->c.x >= avg)
-					trisRight.push_back(tri);
-			}
-		}
-		else if (split == 1) {
-			for (const Triangle* tri : a_tris)
-				avg += tri->a.y + tri->b.y + tri->c.y;
-			avg /= 3.0f * a_tris.size();
-			for (const Triangle* tri : a_tris) {
-				if (tri->a.y <= avg || tri->b.y <= avg || tri->c.y <= avg)
-					trisLeft.push_back(tri);
-				if (tri->a.y >= avg || tri->b.y >= avg || tri->c.y >= avg)
-					trisRight.push_back(tri);
-			}
-		}
-		else if (split == 2) {
-			for (const Triangle* tri : a_tris)
-				avg += tri->a.z + tri->b.z + tri->c.z;
-			avg /= 3.0f * a_tris.size();
-			for (const Triangle* tri : a_tris) {
-				if (tri->a.z <= avg || tri->b.z <= avg || tri->c.z <= avg)
-					trisLeft.push_back(tri);
-				if (tri->a.z >= avg || tri->b.z >= avg || tri->c.z >= avg)
-					trisRight.push_back(tri);
-			}
-		}
-		else {
-			assert(false);
-		}
-
-		if (split == 0) {
-			left = std::make_unique<AccelerationStructure>();
-			left->setBounds(bounds[0], Vec3f{ avg, bounds[1].y, bounds[1].z });
-			left->setTris(trisLeft, a_depth + 1, options);
-			right = std::make_unique<AccelerationStructure>();
-			right->setBounds(Vec3f{ avg, bounds[0].y, bounds[0].z }, bounds[1]);
-			right->setTris(trisRight, a_depth + 1, options);
-		}
-		else if (split == 1) {
-			left = std::make_unique<AccelerationStructure>();
-			left->setBounds(bounds[0], Vec3f{ bounds[1].x, avg, bounds[1].z });
-			left->setTris(trisLeft, a_depth + 1, options);
-			right = std::make_unique<AccelerationStructure>();
-			right->setBounds(Vec3f{ bounds[0].x, avg, bounds[0].z }, bounds[1]);
-			right->setTris(trisRight, a_depth + 1, options);
-		}
-		else {
-			left = std::make_unique<AccelerationStructure>();
-			left->setBounds(bounds[0], Vec3f{ bounds[1].x, bounds[1].y, avg });
-			left->setTris(trisLeft, a_depth + 1, options);
-			right = std::make_unique<AccelerationStructure>();
-			right->setBounds(Vec3f{ bounds[0].x, bounds[0].y, avg }, bounds[1]);
-			right->setTris(trisRight, a_depth + 1, options);
+	if (split == 0) {
+		for (const Triangle* const tri : a_tris)
+			avg += tri->a.x + tri->b.x + tri->c.x;
+		avg /= 3.0f * a_tris.size();
+		for (const Triangle* const tri : a_tris) {
+			if (tri->a.x <= avg || tri->b.x <= avg || tri->c.x <= avg)
+				trisLeft.push_back(tri);
+			if (tri->a.x >= avg || tri->b.x >= avg || tri->c.x >= avg)
+				trisRight.push_back(tri);
 		}
 	}
+	else if (split == 1) {
+		for (const Triangle* tri : a_tris)
+			avg += tri->a.y + tri->b.y + tri->c.y;
+		avg /= 3.0f * a_tris.size();
+		for (const Triangle* tri : a_tris) {
+			if (tri->a.y <= avg || tri->b.y <= avg || tri->c.y <= avg)
+				trisLeft.push_back(tri);
+			if (tri->a.y >= avg || tri->b.y >= avg || tri->c.y >= avg)
+				trisRight.push_back(tri);
+		}
+	}
+	else if (split == 2) {
+		for (const Triangle* tri : a_tris)
+			avg += tri->a.z + tri->b.z + tri->c.z;
+		avg /= 3.0f * a_tris.size();
+		for (const Triangle* tri : a_tris) {
+			if (tri->a.z <= avg || tri->b.z <= avg || tri->c.z <= avg)
+				trisLeft.push_back(tri);
+			if (tri->a.z >= avg || tri->b.z >= avg || tri->c.z >= avg)
+				trisRight.push_back(tri);
+		}
+	}
+
+	left = std::make_unique<AccelerationStructure>();
+	right = std::make_unique<AccelerationStructure>();
+
+	if (split == 0) {
+		left->setBounds(bounds[0], Vec3f{ avg, bounds[1].y, bounds[1].z });
+		right->setBounds(Vec3f{ avg, bounds[0].y, bounds[0].z }, bounds[1]);
+	}
+	else if (split == 1) {
+		left->setBounds(bounds[0], Vec3f{ bounds[1].x, avg, bounds[1].z });
+		right->setBounds(Vec3f{ bounds[0].x, avg, bounds[0].z }, bounds[1]);
+	}
+	else {
+		left->setBounds(bounds[0], Vec3f{ bounds[1].x, bounds[1].y, avg });
+		right->setBounds(Vec3f{ bounds[0].x, bounds[0].y, avg }, bounds[1]);
+	}
+
+	right->setup(trisRight, a_depth + 1, options);
+	left->setup(trisLeft, a_depth + 1, options);
+
 }
 
 void AccelerationStructure::setBounds(const Vec3f& a, const Vec3f& b)
@@ -275,8 +244,8 @@ bool AccelerationStructure::intersectAccelStruct(const Vec3f& orig, const Vec3f&
 	Vec2f tempUV;
 	const Triangle* tempTriPtr;
 	t0 = std::numeric_limits<float>::max();
-	if (left != nullptr) {
-		assert(right != nullptr);
+	if (left) {
+		assert(right);
 		if (left->intersectAccelStruct(orig, dir, tempT, tempTriPtr, tempUV) && tempT < t0) {
 			inter = true;
 			t0 = tempT;

@@ -160,7 +160,7 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
     mesh->allTris.reserve(tris.size());
     for (const Triangle* tri : tris)
         mesh->allTris.push_back(tri);
-    mesh->ac->setTris(tris, 1, options);
+    mesh->ac->setup(tris, 1, options);
 #ifdef _STATS
     stats::meshCount.store(stats::meshCount.load() + mesh->allTris.size());
 #endif // _STATS

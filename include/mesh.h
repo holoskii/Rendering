@@ -47,7 +47,7 @@ public:
 	~AccelerationStructure();
 
 	void setBounds(const Vec3f& a, const Vec3f& b);
-	void setTris(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options);
+	void setup(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options);
 	bool intersectBox(const Vec3f& orig, const Vec3f& dir) const;
 	bool intersectAccelStruct(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, Vec2f& uv) const;
 

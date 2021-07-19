@@ -24,6 +24,7 @@ public:
 	{
 		if (!running)
 			return 0;
+		running = false;
 		auto stopTime = std::chrono::high_resolution_clock::now();
 		long long duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count();
 		std::cout << name << " \t" << duration << " ms" << std::endl;
