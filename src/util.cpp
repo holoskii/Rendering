@@ -103,10 +103,10 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
             
             if (!normalized) {
                 normalized = true;
-                Vec3f normSize = size;
-                normSize.y = normSize.x / ((max.x - min.x) / (max.y - min.y));
-                normSize.z = normSize.x / ((max.x - min.x) / (max.z - min.z));
-                Vec3f range = max - min;
+				Vec3f range = max - min;
+				Vec3f stretch = size / range;
+				float maxStretch = std::max(stretch.x, std::max(stretch.y, stretch.z));
+				Vec3f normSize = size / maxStretch;
                 for (auto& v : vertexData) {
                     v.x = normSize.x * ((v.x - min.x) / range.x - 0.5f) + pos.x;
                     v.y = normSize.y * ((v.y - min.y) / range.y - 0.5f) + pos.y;
