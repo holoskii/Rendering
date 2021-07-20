@@ -106,13 +106,26 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
 				Vec3f range = max - min;
 				Vec3f stretch = size / range;
 				float maxStretch = std::max(stretch.x, std::max(stretch.y, stretch.z));
-				Vec3f normSize = size / maxStretch;
+
+				Vec3f normSize = size;
+				if (maxStretch == stretch.x) {
+					normSize.y = normSize.x / (range.x / range.y);
+					normSize.z = normSize.x / (range.x / range.z);
+				}
+				else if (maxStretch == stretch.y) {
+					normSize.x = normSize.y / (range.y / range.x);
+					normSize.z = normSize.y / (range.y / range.z);
+				}
+				else {
+					normSize.x = normSize.z / (range.z / range.x);
+					normSize.y = normSize.z / (range.z / range.y);
+				}
+				
                 for (auto& v : vertexData) {
                     v.x = normSize.x * ((v.x - min.x) / range.x - 0.5f) + pos.x;
                     v.y = normSize.y * ((v.y - min.y) / range.y - 0.5f) + pos.y;
                     v.z = normSize.z * ((v.z - min.z) / range.z - 0.5f) + pos.z;
                 }
-
                 mesh->ac->setBounds(pos - normSize / 2, pos + normSize / 2);
             }
 
