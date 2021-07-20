@@ -260,6 +260,36 @@ int Scene::render()
 	Vec3f* frameBuffer = new Vec3f[options.height * options.width];
 
 	launchWorkers(frameBuffer);
+
+#ifdef _SHOW_AC
+	const Vec3f orig = { 0, 0, 0 };
+	const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
+	float imageAspectRatio = (options.width) / (float)options.height;
+
+	int acMax = 0;
+	int* acBuffer = new int[options.width * options.height];
+
+	for (size_t y = 0; y < options.height; y++) {
+		for (size_t x = 0; x < options.width; x++) {
+			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
+			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
+			Vec3f dir = Vec3f(xPix, yPix, -1).normalize();
+			int val = interAC(orig, dir, objects, options);
+			if (val > acMax) acMax = val;
+			acBuffer[x + y * options.width] = val;
+		}
+	}
+
+	for (size_t y = 0; y < options.height; y++) {
+		for (size_t x = 0; x < options.width; x++) {
+			float val = acBuffer[x + y * options.width];
+			val /= acMax;
+			frameBuffer[x + y * options.width] += Vec3f{ val };
+		}
+	}
+	delete[] acBuffer;
+#endif // _SHOW_AC
+
 #ifndef _NO_OUTPUT
 	savePPM(frameBuffer, options);
 #endif // _NO_OUTPUT

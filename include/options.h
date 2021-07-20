@@ -16,7 +16,7 @@ public:
 
 	std::string imagePath = "D:\\dev\\RayTracing";
 	std::string imageName = "out.ppm";
-	Vec3f backgroundColor{ 0.2f, 0.2f, 0.2f };
+	Vec3f backgroundColor{ 0.0f, 0.0f, 0.0f };
 
 	int minBatchSizeAccelStruct = 10;
 	int maxDepthAccelStruct = 5;

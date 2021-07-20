@@ -3,6 +3,7 @@
 #include <cassert>
 #include <tuple>
 #include <queue>
+#include <functional>
 
 #include "stats.h"
 #include "options.h"
@@ -111,6 +112,133 @@ AccelerationStructure::AccelerationStructure()
 
 AccelerationStructure::~AccelerationStructure(){}
 
+float AccelerationStructure::calculateSAH(const int orientation, const std::vector<const Triangle*>& tris, 
+	const Vec3f bounds[2], const float boundary)
+{
+	float sah = 0.0f;
+	int triLeft = 0;
+	int triRight = 0;
+	if (orientation == 0) {
+		assert(bounds[0].x <= boundary && bounds[1].x >= boundary);
+		for (const Triangle* tri : tris) {
+			if (tri->a.x <= boundary || tri->b.x <= boundary || tri->c.x <= boundary)
+				triLeft++;
+			if (tri->a.x >= boundary || tri->b.x >= boundary || tri->c.x >= boundary)
+				triRight++;
+		}
+		sah = triLeft * (boundary - bounds[0].x) + triRight * (bounds[1].x - boundary);
+	}
+	else if (orientation == 1) {
+		assert(bounds[0].y <= boundary && bounds[1].y >= boundary);
+		for (const Triangle* tri : tris) {
+			if (tri->a.y <= boundary || tri->b.y <= boundary || tri->c.y <= boundary)
+				triLeft++;
+			if (tri->a.y >= boundary || tri->b.y >= boundary || tri->c.y >= boundary)
+				triRight++;
+		}
+		sah = triLeft * (boundary - bounds[0].y) + triRight * (bounds[1].y - boundary);
+	}
+	else if (orientation == 2) {
+		assert(bounds[0].z <= boundary && bounds[1].z >= boundary);
+		for (const Triangle* tri : tris) {
+			if (tri->a.z <= boundary || tri->b.z <= boundary || tri->c.z <= boundary)
+				triLeft++;
+			if (tri->a.z >= boundary || tri->b.z >= boundary || tri->c.z >= boundary)
+				triRight++;
+		}
+		sah = triLeft * (boundary - bounds[0].z) + triRight * (bounds[1].z - boundary);
+	}
+	return sah;
+}
+
+float AccelerationStructure::binarySearchSAH(const int orientation, const std::vector<const Triangle*>& tris, 
+	const Vec3f bounds[2], const float left, const float right)
+{
+	float mid = right - (right - left) / 2;
+	if (right - left < 0.1f) return mid;
+	if (calculateSAH(orientation, tris, bounds, mid - 0.05f)
+		< calculateSAH(orientation, tris, bounds, mid + 0.05f)) {
+		return binarySearchSAH(orientation, tris, bounds, left, mid);
+	}
+	else {
+		return binarySearchSAH(orientation, tris, bounds, mid, right);
+	}
+}
+
+float AccelerationStructure::getOptimalSplit(const std::vector<const Triangle*>& tris, const int orientation, 
+	const Vec3f bounds[2], std::vector<const Triangle*>& trisLeft, std::vector<const Triangle*>& trisRight)
+{
+	float splitDist = 0.0f;
+#if 0
+	// divide by equal parts
+	if (orientation == 0) {
+		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).x;
+	}
+	else if (orientation == 1) {
+		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).y;
+	}
+	else if (orientation == 2) {
+		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).z;
+	}
+#elif 1
+	
+	if (orientation == 0) {
+		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].x, bounds[1].x);
+	}
+	else if (orientation == 1) {
+		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].y, bounds[1].y);
+	}
+	else if (orientation == 2) {
+		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].z, bounds[1].z);
+	}
+#else
+	// divide by average
+	if (orientation == 0) {
+		for (const Triangle* const tri : tris)
+			splitDist += tri->a.x + tri->b.x + tri->c.x;
+		splitDist /= 3.0f * tris.size();
+	}
+	else if (orientation == 1) {
+		for (const Triangle* tri : tris)
+			splitDist += tri->a.y + tri->b.y + tri->c.y;
+		splitDist /= 3.0f * tris.size();
+	}
+	else if (orientation == 2) {
+		for (const Triangle* tri : tris)
+			splitDist += tri->a.z + tri->b.z + tri->c.z;
+		splitDist /= 3.0f * tris.size();
+}
+#endif
+
+	// split between left and right (some tris will be dublicated)
+	if (orientation == 0) {
+		for (const Triangle* const tri : tris) {
+			if (tri->a.x <= splitDist || tri->b.x <= splitDist || tri->c.x <= splitDist)
+				trisLeft.push_back(tri);
+			if (tri->a.x >= splitDist || tri->b.x >= splitDist || tri->c.x >= splitDist)
+				trisRight.push_back(tri);
+		}
+	}
+	else if (orientation == 1) {
+		for (const Triangle* tri : tris) {
+			if (tri->a.y <= splitDist || tri->b.y <= splitDist || tri->c.y <= splitDist)
+				trisLeft.push_back(tri);
+			if (tri->a.y >= splitDist || tri->b.y >= splitDist || tri->c.y >= splitDist)
+				trisRight.push_back(tri);
+		}
+	}
+	else if (orientation == 2) {
+		for (const Triangle* tri : tris) {
+			if (tri->a.z <= splitDist || tri->b.z <= splitDist || tri->c.z <= splitDist)
+				trisLeft.push_back(tri);
+			if (tri->a.z >= splitDist || tri->b.z >= splitDist || tri->c.z >= splitDist)
+				trisRight.push_back(tri);
+		}
+	}
+
+	return splitDist;
+}
+
 void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options)
 {
 #ifdef _NO_ACCEL_STRUCT
@@ -119,70 +247,44 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 
 	if (a_tris.size() < options.minBatchSizeAccelStruct || a_depth >= options.maxDepthAccelStruct) {
 #ifdef _STATS
-		stats::triCopiesCount.store(stats::triCopiesCount.load() + vec->size());
+		stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
 #endif // _STATS
-		// std::cout << a_depth << ' ' << a_tris.size() << '\n';
 		tris = a_tris;
 		return;
 	}
 
-	int split; // xyz split
+	int orientation; // xyz orientation
 	Vec3f dim = bounds[1] - bounds[0];
-	if (dim.x > dim.y && dim.x > dim.z) split = 0;
-	else if (dim.y > dim.z) split = 1;
-	else split = 2;
-	float avg = 0.0f;
+	if (dim.x > dim.y && dim.x > dim.z) orientation = 0;
+	else if (dim.y > dim.z) orientation = 1;
+	else orientation = 2;
 	std::vector<const Triangle*> trisLeft;
 	std::vector<const Triangle*> trisRight;
 
-	if (split == 0) {
-		for (const Triangle* const tri : a_tris)
-			avg += tri->a.x + tri->b.x + tri->c.x;
-		avg /= 3.0f * a_tris.size();
-		for (const Triangle* const tri : a_tris) {
-			if (tri->a.x <= avg || tri->b.x <= avg || tri->c.x <= avg)
-				trisLeft.push_back(tri);
-			if (tri->a.x >= avg || tri->b.x >= avg || tri->c.x >= avg)
-				trisRight.push_back(tri);
-		}
-	}
-	else if (split == 1) {
-		for (const Triangle* tri : a_tris)
-			avg += tri->a.y + tri->b.y + tri->c.y;
-		avg /= 3.0f * a_tris.size();
-		for (const Triangle* tri : a_tris) {
-			if (tri->a.y <= avg || tri->b.y <= avg || tri->c.y <= avg)
-				trisLeft.push_back(tri);
-			if (tri->a.y >= avg || tri->b.y >= avg || tri->c.y >= avg)
-				trisRight.push_back(tri);
-		}
-	}
-	else if (split == 2) {
-		for (const Triangle* tri : a_tris)
-			avg += tri->a.z + tri->b.z + tri->c.z;
-		avg /= 3.0f * a_tris.size();
-		for (const Triangle* tri : a_tris) {
-			if (tri->a.z <= avg || tri->b.z <= avg || tri->c.z <= avg)
-				trisLeft.push_back(tri);
-			if (tri->a.z >= avg || tri->b.z >= avg || tri->c.z >= avg)
-				trisRight.push_back(tri);
-		}
+	float splitDist = getOptimalSplit(a_tris, orientation, bounds, trisLeft, trisRight);
+
+	if ((trisLeft.size() == 0 || trisRight.size() == 0) || (trisLeft.size() + trisRight.size() >= a_tris.size() * 1.5)) {
+#ifdef _STATS
+		stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
+#endif // _STATS
+		tris = a_tris;
+		return;
 	}
 
 	left = std::make_unique<AccelerationStructure>();
 	right = std::make_unique<AccelerationStructure>();
 
-	if (split == 0) {
-		left->setBounds(bounds[0], Vec3f{ avg, bounds[1].y, bounds[1].z });
-		right->setBounds(Vec3f{ avg, bounds[0].y, bounds[0].z }, bounds[1]);
+	if (orientation == 0) {
+		left->setBounds(bounds[0], Vec3f{ splitDist, bounds[1].y, bounds[1].z });
+		right->setBounds(Vec3f{ splitDist, bounds[0].y, bounds[0].z }, bounds[1]);
 	}
-	else if (split == 1) {
-		left->setBounds(bounds[0], Vec3f{ bounds[1].x, avg, bounds[1].z });
-		right->setBounds(Vec3f{ bounds[0].x, avg, bounds[0].z }, bounds[1]);
+	else if (orientation == 1) {
+		left->setBounds(bounds[0], Vec3f{ bounds[1].x, splitDist, bounds[1].z });
+		right->setBounds(Vec3f{ bounds[0].x, splitDist, bounds[0].z }, bounds[1]);
 	}
 	else {
-		left->setBounds(bounds[0], Vec3f{ bounds[1].x, bounds[1].y, avg });
-		right->setBounds(Vec3f{ bounds[0].x, bounds[0].y, avg }, bounds[1]);
+		left->setBounds(bounds[0], Vec3f{ bounds[1].x, bounds[1].y, splitDist });
+		right->setBounds(Vec3f{ bounds[0].x, bounds[0].y, splitDist }, bounds[1]);
 	}
 
 	right->setup(trisRight, a_depth + 1, options);

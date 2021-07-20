@@ -48,3 +48,7 @@ int savePPM(Vec3f* frameBuffer, const Options& options);
 Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, const Options& options);
 
 bool loadScene(Scene& scene, Options& options, const std::string& sceneName);
+
+int recInterAC(const Vec3f& orig, const Vec3f& dir, AccelerationStructure* ac);
+
+int interAC(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, const Options& options);

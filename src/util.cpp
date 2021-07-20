@@ -348,3 +348,24 @@ bool loadScene(Scene& scene, Options& options, const std::string& sceneName)
 	std::cout << "Scene wasn't loaded\n";
 	return false;
 }
+
+int recInterAC(const Vec3f& orig, const Vec3f& dir, AccelerationStructure* ac)
+{
+	if (ac == nullptr)
+		return 0;
+	if (ac->intersectBox(orig, dir)) {
+		return 1 + recInterAC(orig, dir, ac->left.get()) + recInterAC(orig, dir, ac->right.get());
+	}
+}
+
+int interAC(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, const Options& options)
+{
+	int sum = 0;
+	for (auto& obj : objects) {
+		if (obj->objectType == ObjectType::Mesh) {
+			Mesh* mesh = dynamic_cast<Mesh*>(obj.get());
+			sum += recInterAC(orig, dir, mesh->ac.get());
+		}
+	}
+	return sum;
+}

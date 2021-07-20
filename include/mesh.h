@@ -51,6 +51,13 @@ public:
 	bool intersectBox(const Vec3f& orig, const Vec3f& dir) const;
 	bool intersectAccelStruct(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, Vec2f& uv) const;
 
+	static float calculateSAH(const int orientation, const std::vector<const Triangle*>& tris,
+		const Vec3f bounds[2], const float boundary);
+	static float binarySearchSAH(const int orientation, const std::vector<const Triangle*>& tris,
+		const Vec3f bounds[2], const float left, const float right);
+	static float getOptimalSplit(const std::vector<const Triangle*>& tris, const int orientation,
+		const Vec3f bounds[2], std::vector<const Triangle*>& trisLeft, std::vector<const Triangle*>& trisRight);
+
 	std::unique_ptr<AccelerationStructure> left;
 	std::unique_ptr<AccelerationStructure> right;
 	std::vector<const Triangle*> tris;
