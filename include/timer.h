@@ -25,10 +25,12 @@ public:
 		if (!running)
 			return 0;
 		running = false;
+#ifndef _NO_OUTPUT 
 		auto stopTime = std::chrono::high_resolution_clock::now();
 		long long duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count();
 		std::cout << name << " \t" << duration << " ms" << std::endl;
 		return duration;
+#endif // _NO_OUTPUT
 	}
 
 private:

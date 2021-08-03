@@ -23,7 +23,7 @@ Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, const V
 	n_c = a_n_c;
 }
 
-bool Triangle::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir, const Triangle* triPtr,
+bool Triangle::rayTriangleIntersect(const Ray& ray, const Triangle* triPtr,
 	float& t, Vec2f& uv)
 {
 #ifdef _STATS
@@ -37,7 +37,7 @@ bool Triangle::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir, const T
 	float u, v;
 	Vec3f v0v1 = v1 - v0;
 	Vec3f v0v2 = v2 - v0;
-	Vec3f pvec = dir.crossProduct(v0v2);
+	Vec3f pvec = ray.dir.crossProduct(v0v2);
 	float det = v0v1.dotProduct(pvec);
 
 #ifdef _BACKFACE_CULLING
@@ -47,12 +47,12 @@ bool Triangle::rayTriangleIntersect(const Vec3f& orig, const Vec3f& dir, const T
 	if (fabs(det) < 1e-8) return false;
 
 	float invDet = 1 / det;
-	Vec3f tvec = orig - v0;
+	Vec3f tvec = ray.orig - v0;
 	u = tvec.dotProduct(pvec) * invDet;
 	if (u < 0 || u > 1) return false;
 
 	Vec3f qvec = tvec.crossProduct(v0v1);
-	v = dir.dotProduct(qvec) * invDet;
+	v = ray.dir.dotProduct(qvec) * invDet;
 	if (v < 0 || u + v > 1) return false;
 
 	t = v0v2.dotProduct(qvec) * invDet;
@@ -80,10 +80,10 @@ bool Mesh::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f
 	std::exit(-1);
 }
 
-bool Mesh::intersectMesh(const Vec3f& orig, const Vec3f& dir, float& t0, const Triangle*& triPtr, 
+bool Mesh::intersectMesh(const Ray& ray, float& t0, const Triangle*& triPtr,
 	Vec2f& uv) const
 {
-	return ac->intersectAccelStruct(orig, dir, t0, triPtr, uv);
+	return ac->intersectAccelStruct(ray, t0, triPtr, uv);
 }
 
 void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv, 
@@ -298,7 +298,7 @@ void AccelerationStructure::setBounds(const Vec3f& a, const Vec3f& b)
 	bounds[1] = b;
 }
 
-bool AccelerationStructure::intersectBox(const Vec3f& orig, const Vec3f& dir) const
+bool AccelerationStructure::intersectBox(const Ray& ray) const
 {
 #ifdef _NO_ACCEL_STRUCT
 	return true;
@@ -306,14 +306,14 @@ bool AccelerationStructure::intersectBox(const Vec3f& orig, const Vec3f& dir) co
 #ifdef _STATS
 	stats::accelStructTests.store(stats::accelStructTests.load() + 1);
 #endif // _STATS
-	const Vec3f invdir = 1 / dir;
+	const Vec3f invdir = 1 / ray.dir;
 	const int sign[3] = { (invdir.x < 0), (invdir.y < 0), (invdir.z < 0) };
 
 	float tmin, tmax, tymin, tymax, tzmin, tzmax;
-	tmin = (bounds[sign[0]].x - orig.x) * invdir.x;
-	tmax = (bounds[1 - sign[0]].x - orig.x) * invdir.x;
-	tymin = (bounds[sign[1]].y - orig.y) * invdir.y;
-	tymax = (bounds[1 - sign[1]].y - orig.y) * invdir.y;
+	tmin = (bounds[sign[0]].x - ray.orig.x) * invdir.x;
+	tmax = (bounds[1 - sign[0]].x - ray.orig.x) * invdir.x;
+	tymin = (bounds[sign[1]].y - ray.orig.y) * invdir.y;
+	tymax = (bounds[1 - sign[1]].y - ray.orig.y) * invdir.y;
 
 	if ((tmin > tymax) || (tymin > tmax))
 		return false;
@@ -322,8 +322,8 @@ bool AccelerationStructure::intersectBox(const Vec3f& orig, const Vec3f& dir) co
 	if (tymax < tmax)
 		tmax = tymax;
 
-	tzmin = (bounds[sign[2]].z - orig.z) * invdir.z;
-	tzmax = (bounds[1 - sign[2]].z - orig.z) * invdir.z;
+	tzmin = (bounds[sign[2]].z - ray.orig.z) * invdir.z;
+	tzmax = (bounds[1 - sign[2]].z - ray.orig.z) * invdir.z;
 
 	if ((tmin > tzmax) || (tzmin > tmax))
 		return false;
@@ -335,10 +335,10 @@ bool AccelerationStructure::intersectBox(const Vec3f& orig, const Vec3f& dir) co
 	return true;
 }
 
-bool AccelerationStructure::intersectAccelStruct(const Vec3f& orig, const Vec3f& dir, float& t0, 
+bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 	const Triangle*& triPtr, Vec2f& uv) const
 {
-	if (!this->intersectBox(orig, dir))
+	if (!this->intersectBox(ray))
 		return false;
 
 	bool inter = false;
@@ -348,13 +348,13 @@ bool AccelerationStructure::intersectAccelStruct(const Vec3f& orig, const Vec3f&
 	t0 = std::numeric_limits<float>::max();
 	if (left) {
 		assert(right);
-		if (left->intersectAccelStruct(orig, dir, tempT, tempTriPtr, tempUV) && tempT < t0) {
+		if (left->intersectAccelStruct(ray, tempT, tempTriPtr, tempUV) && tempT < t0) {
 			inter = true;
 			t0 = tempT;
 			uv = tempUV;
 			triPtr = tempTriPtr;
 		}
-		if (right->intersectAccelStruct(orig, dir, tempT, tempTriPtr, tempUV) && tempT < t0) {
+		if (right->intersectAccelStruct(ray, tempT, tempTriPtr, tempUV) && tempT < t0) {
 			inter = true;
 			t0 = tempT;
 			uv = tempUV;
@@ -366,7 +366,7 @@ bool AccelerationStructure::intersectAccelStruct(const Vec3f& orig, const Vec3f&
 	}
 
 	for (const Triangle* tri : tris) {
-		if (Triangle::rayTriangleIntersect(orig, dir, tri, tempT, tempUV) && tempT < t0) {
+		if (Triangle::rayTriangleIntersect(ray, tri, tempT, tempUV) && tempT < t0) {
 			inter = true;
 			t0 = tempT;
 			uv = tempUV;

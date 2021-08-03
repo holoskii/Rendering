@@ -14,7 +14,7 @@ public:
 	int maxRayDepth = 5;
 	int nWorkers = 8;
 
-	std::string imagePath = "D:\\dev\\RayTracing";
+	std::string imagePath = "D:\\dev\\CG\\RayTracing";
 	std::string imageName = "out.ppm";
 	Vec3f backgroundColor{ 0.0f, 0.0f, 0.0f };
 

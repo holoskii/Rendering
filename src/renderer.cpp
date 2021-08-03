@@ -10,6 +10,12 @@
 #include "options.h"
 #include "util.h"
 
+Ray::Ray(const Vec3f& a_orig, const Vec3f& a_dir, const RayType a_rayType)
+	: orig(a_orig), dir(a_dir), rayType(a_rayType) {}
+
+Camera::Camera(const Vec3f& a_pos, const Vec3f& a_rot)
+	: pos(a_pos), rot(a_rot) {}
+
 Vec3f Renderer::reflect(const Vec3f& dir, const Vec3f& normal)
 {
 	return dir - 2 * dir.dotProduct(normal) * normal;
@@ -62,20 +68,19 @@ float Renderer::fresnel(const Vec3f& dir, const Vec3f& normal, const float& inde
 	return kr;
 }
 
-bool Renderer::trace(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects,
-	IntersectInfo& intrInfo, const RayType rayType)
+bool Renderer::trace(const Ray& ray, const ObjectVector& objects, IntersectInfo& intrInfo)
 {
 	intrInfo.hitObject = nullptr;
 	for (auto i = objects.begin(); i != objects.end(); i++) {
 		// transparent objects do not cast shadows
-		if (rayType == RayType::ShadowRay && (*i).get()->materialType == MaterialType::Transparent)
+		if (ray.rayType == RayType::ShadowRay && (*i).get()->materialType == MaterialType::Transparent)
 			continue;
 		float tNear = std::numeric_limits<float>::max();
 		const Triangle* ptr = nullptr;
 		Vec2f uv;
 
 		if ((*i).get()->objectType == ObjectType::Mesh) {
-			if (dynamic_cast<Mesh*>((*i).get())->intersectMesh(orig, dir, tNear, ptr, uv) && tNear < intrInfo.tNear) {
+			if (dynamic_cast<Mesh*>((*i).get())->intersectMesh(ray, tNear, ptr, uv) && tNear < intrInfo.tNear) {
 				intrInfo.hitObject = (*i).get();
 				intrInfo.tNear = tNear;
 				intrInfo.triPtr = ptr;
@@ -83,7 +88,7 @@ bool Renderer::trace(const Vec3f& orig, const Vec3f& dir, const ObjectVector& ob
 			}
 		}
 		else {
-			if ((*i).get()->intersectObject(orig, dir, tNear, uv) && tNear < intrInfo.tNear) {
+			if ((*i).get()->intersectObject(ray.orig, ray.dir, tNear, uv) && tNear < intrInfo.tNear) {
 				intrInfo.hitObject = (*i).get();
 				intrInfo.tNear = tNear;
 				intrInfo.uv = uv;
@@ -93,12 +98,11 @@ bool Renderer::trace(const Vec3f& orig, const Vec3f& dir, const ObjectVector& ob
 	return (intrInfo.hitObject != nullptr);
 }
 
-Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, 
-	const LightsVector& lights,	const Options& options, const int depth)
+Vec3f Renderer::castRay(const Ray& ray, const Scene& scene, const int depth)
 {
-	if (depth > options.maxRayDepth) return options.backgroundColor;
+	if (depth > scene.options.maxRayDepth) return scene.options.backgroundColor;
 	IntersectInfo intrInfo;
-	if (trace(orig, dir, objects, intrInfo)) {
+	if (trace(ray, scene.objects, intrInfo)) {
 		//return Vec3f{ 1.0f };
 		/*if (intrInfo.hitObject->objectType == ObjectType::Mesh) {
 			const Mesh* mesh = dynamic_cast<const Mesh*>(intrInfo.hitObject);
@@ -107,7 +111,7 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector&
 		Vec3f hitColor = intrInfo.hitObject->color;
 		Vec3f hitNormal;
 		Vec2f hitTexCoordinates;
-		Vec3f hitPoint = orig + dir * intrInfo.tNear;
+		Vec3f hitPoint = ray.orig + ray.dir * intrInfo.tNear;
 		intrInfo.hitObject->getSurfaceData(hitPoint, intrInfo.triPtr, intrInfo.uv, hitNormal, hitTexCoordinates);
 
 		Vec3f objectColor = intrInfo.hitObject->color;
@@ -115,46 +119,46 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector&
 
 		if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
 			// for diffuse objects collect light from all visible sources
-			for (size_t i = 0; i < lights.size(); ++i) {
+			for (size_t i = 0; i < scene.lights.size(); ++i) {
 				IntersectInfo intrShadInfo;
 				Vec3f lightDir, lightIntensity;
-				lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
-				bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, intrShadInfo, RayType::ShadowRay);
+				scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
+				bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, intrShadInfo);
 				float pattern = intrInfo.hitObject->getPattern(hitTexCoordinates);
 				hitColor += (objectColor * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
 			}
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
 			// get info from reflected ray
-			Vec3f reflectedRay = dir - 2 * dir.dotProduct(hitNormal) * hitNormal;
-			hitColor = 0.8f * castRay(hitPoint + options.bias * hitNormal, reflectedRay, objects, lights, options, depth + 1);
+			Ray reflectedRay { hitPoint + scene.options.bias * hitNormal, ray.dir - 2 * ray.dir.dotProduct(hitNormal) * hitNormal };
+			hitColor = 0.8f * castRay(reflectedRay, scene, depth + 1);
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Transparent) {
-			float kr = fresnel(dir, hitNormal, intrInfo.hitObject->indexOfRefraction);
-			bool outside = dir.dotProduct(hitNormal) < 0;
-			Vec3f biasVec = options.bias * hitNormal;
+			float kr = fresnel(ray.dir, hitNormal, intrInfo.hitObject->indexOfRefraction);
+			bool outside = ray.dir.dotProduct(hitNormal) < 0;
+			Vec3f biasVec = scene.options.bias * hitNormal;
 			hitColor = { 0 };
 			if (kr < 1) {
 				// compute refraction if it is not a case of total internal reflection
-				Vec3f refractionDirection = refract(dir, hitNormal, intrInfo.hitObject->indexOfRefraction).normalize();
+				Vec3f refractionDirection = refract(ray.dir, hitNormal, intrInfo.hitObject->indexOfRefraction).normalize();
 				Vec3f refractionRayOrig = outside ? hitPoint - biasVec : hitPoint + biasVec; // add bias
-				Vec3f refractionColor = castRay(refractionRayOrig, refractionDirection, objects, lights, options, depth + 1);
+				Vec3f refractionColor = castRay(Ray{ refractionRayOrig, refractionDirection }, scene, depth + 1);
 				hitColor += refractionColor * (1 - kr);
 			}
 
-			Vec3f reflectionDirection = reflect(dir, hitNormal).normalize();
+			Vec3f reflectionDirection = reflect(ray.dir, hitNormal).normalize();
 			Vec3f reflectionRayOrig = outside ? hitPoint + biasVec : hitPoint - biasVec;    // add bias
-			Vec3f reflectionColor = castRay(reflectionRayOrig, reflectionDirection, objects, lights, options, depth + 1);
+			Vec3f reflectionColor = castRay(Ray{ reflectionRayOrig, reflectionDirection }, scene, depth + 1);
 			hitColor += reflectionColor * kr;
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Phong) {
 			Vec3f diffuseLight = 0, specularLight = 0;
-			for (uint32_t i = 0; i < lights.size(); ++i) {
+			for (uint32_t i = 0; i < scene.lights.size(); ++i) {
 				Vec3f lightDir, lightIntensity;
 				IntersectInfo isectShad;
-				lights[i]->illuminate(hitPoint, lightDir, lightIntensity, isectShad.tNear);
+				scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, isectShad.tNear);
 
-				bool vis = !trace(hitPoint + hitNormal * options.bias, -lightDir, objects, isectShad, RayType::ShadowRay);
+				bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, isectShad);
 				// if (isectShad.tNear > lights[i])
 
 				// compute the diffuse component
@@ -163,7 +167,7 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector&
 				// compute the specular component
 				// what would be the ideal reflection direction for this light ray
 				Vec3f R = reflect(lightDir, hitNormal);
-				specularLight += vis * intrInfo.hitObject->specular * lightIntensity * std::pow(std::max(0.f, R.dotProduct(-dir)), intrInfo.hitObject->nSpecular); // * intrInfo.hitObject->kReflect)
+				specularLight += vis * intrInfo.hitObject->specular * lightIntensity * std::pow(std::max(0.f, R.dotProduct(-ray.dir)), intrInfo.hitObject->nSpecular); // * intrInfo.hitObject->kReflect)
 					// + (intrInfo.hitObject->color * (1 - intrInfo.hitObject->kReflect));
 			}
 			hitColor = objectColor * intrInfo.hitObject->ambient + diffuseLight + specularLight;
@@ -171,7 +175,7 @@ Vec3f Renderer::castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector&
 		}
 		return hitColor;
 	}
-	return options.backgroundColor;
+	return scene.options.backgroundColor;
 }
 
 
@@ -195,8 +199,8 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 			}
 			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
 			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
-			Vec3f dir = Vec3f(xPix, yPix, -1).normalize();
-			frameBuffer[x + y * options.width] = Renderer::castRay(orig, dir, objects, lights, options, 0);
+			Ray ray{ orig, Vec3f(xPix, yPix, -1).normalize() };
+			frameBuffer[x + y * options.width] = Renderer::castRay(ray, *this, 0);
 			finishedPixels.store(finishedPixels.load() + 1);
 		}
 #ifdef _DEBUG
@@ -290,7 +294,7 @@ int Scene::render()
 	delete[] acBuffer;
 #endif // _SHOW_AC
 
-#ifndef _NO_OUTPUT
+#ifndef _NO_IMAGE_OUTPUT
 	savePPM(frameBuffer, options);
 #endif // _NO_OUTPUT
 	delete[] frameBuffer;
@@ -299,6 +303,8 @@ int Scene::render()
 	stats::printStats();
 #endif // _STATS
 
+#ifndef _NO_OUTPUT
 	std::cout << '\n';
+#endif // _NO_OUTPUT
 	return t.stop();
 }

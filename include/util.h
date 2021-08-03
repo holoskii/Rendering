@@ -49,6 +49,6 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
 
 bool loadScene(Scene& scene, Options& options, const std::string& sceneName);
 
-int recInterAC(const Vec3f& orig, const Vec3f& dir, AccelerationStructure* ac);
+int recInterAC(const Ray& ray, AccelerationStructure* ac);
 
 int interAC(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, const Options& options);

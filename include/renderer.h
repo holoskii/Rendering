@@ -1,5 +1,7 @@
 #pragma once
 
+class Ray;
+class Camera;
 class Options;
 class Scene;
 struct IntersectInfo;
@@ -12,6 +14,25 @@ struct IntersectInfo;
 
 enum class RayType { PrimaryRay, ShadowRay };
 
+class Ray
+{
+public:
+	RayType rayType;
+	Vec3f orig;
+	Vec3f dir;
+	
+	Ray(const Vec3f& a_orig = { 0,0,0 }, const Vec3f& a_dir = { 0,0,-1 }, const RayType a_rayType = RayType::PrimaryRay);
+};
+
+class Camera
+{
+public:
+	Vec3f pos;
+	Vec3f rot;
+
+	Camera(const Vec3f& a_pos = { 0, 0, 0 }, const Vec3f& a_rot = { 0, 0, 0 });
+};
+
 class Scene
 {
 public:
@@ -20,6 +41,7 @@ public:
 	ObjectVector objects;
 	LightsVector lights;
 	Options options;
+	// Camera cam;
 
 	std::atomic<int> finishedPixels{ 0 };
 	std::atomic<int> finishedWorkers{ 0 };
@@ -45,9 +67,7 @@ public:
 	static Vec3f refract(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction);
 	static float fresnel(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction);
 
-	static bool trace(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects,
-		IntersectInfo& intrInfo, const RayType rayType = RayType::PrimaryRay);
+	static bool trace(const Ray& ray, const ObjectVector& objects, IntersectInfo& intrInfo);
 
-	static Vec3f castRay(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, 
-		const LightsVector& lights, const Options& options, const int depth);
+	static Vec3f castRay(const Ray& ray, const Scene& scene, const int depth);
 };

@@ -69,7 +69,10 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
     Vec3f min = { std::numeric_limits<float>::max() };
     Vec3f max = { std::numeric_limits<float>::min() };
 
-    std::cout << "Mesh: " << filename << '\n';
+#ifndef _NO_OUTPUT
+	std::cout << "Mesh: " << filename << '\n'; 
+#endif // _NO_OUTPUT
+    
     do {
         std::getline(ifs, line);
         if (line.find('#') != std::string::npos) line.erase(line.find('#'));
@@ -182,7 +185,10 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
 
 bool loadScene(Scene& scene, Options& options, const std::string& sceneName)
 {
-	std::cout << "Loading scene " << sceneName << '\n';
+#ifndef _NO_OUTPUT
+	std::cout << "Loading scene " << sceneName << '\n'; 
+#endif // _NO_OUTPUT
+	
 	enum class BlockType { None, Options, Light, Object };
 	std::map<std::string, BlockType> blockMap;
 	blockMap["[options]"] = BlockType::Options;
@@ -362,22 +368,22 @@ bool loadScene(Scene& scene, Options& options, const std::string& sceneName)
 	return false;
 }
 
-int recInterAC(const Vec3f& orig, const Vec3f& dir, AccelerationStructure* ac)
+int recInterAC(const Ray& ray, AccelerationStructure* ac)
 {
 	if (ac == nullptr)
 		return 0;
-	if (ac->intersectBox(orig, dir)) {
-		return 1 + recInterAC(orig, dir, ac->left.get()) + recInterAC(orig, dir, ac->right.get());
+	if (ac->intersectBox(ray)) {
+		return 1 + recInterAC(ray, ac->left.get()) + recInterAC(ray, ac->right.get());
 	}
 }
 
-int interAC(const Vec3f& orig, const Vec3f& dir, const ObjectVector& objects, const Options& options)
+int interAC(const Ray& ray, const ObjectVector& objects, const Options& options)
 {
 	int sum = 0;
 	for (auto& obj : objects) {
 		if (obj->objectType == ObjectType::Mesh) {
 			Mesh* mesh = dynamic_cast<Mesh*>(obj.get());
-			sum += recInterAC(orig, dir, mesh->ac.get());
+			sum += recInterAC(ray, mesh->ac.get());
 		}
 	}
 	return sum;
