@@ -1,4 +1,4 @@
-// containing geometry objects: 2d vector, 3d vector, 4x4 transformation matrix
+// containing geometry objects: 2d vector, 3d vector, 4d matrix, 3d Ray
 #pragma once
 
 #include <cstdlib> 
@@ -55,7 +55,6 @@ public:
 	T x, y;
 };
 typedef Vec2<float> Vec2f;
-typedef Vec2<int> Vec2i;
 
 template<typename T>
 class Vec3
@@ -175,7 +174,6 @@ public:
 	T x, y, z;
 };
 typedef Vec3<float> Vec3f;
-typedef Vec3<int> Vec3i;
 
 template<typename T>
 class Matrix44
@@ -277,7 +275,7 @@ public:
 	Vec3<S> multVecMatrix(const Vec3<S>& src) const
 	{
 		Vec3f dst;
-		S a, b, c, w;
+		S w;
 
 		dst.x = src[0] * x[0][0] + src[1] * x[1][0] + src[2] * x[2][0] + x[3][0];
 		dst.y = src[0] * x[0][1] + src[1] * x[1][1] + src[2] * x[2][1] + x[3][1];

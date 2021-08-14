@@ -1,3 +1,4 @@
+// classes describing polygon mesh, single polygon and acceleration structure
 #include "mesh.h"
 
 #include <cassert>
@@ -112,133 +113,6 @@ AccelerationStructure::AccelerationStructure()
 
 AccelerationStructure::~AccelerationStructure(){}
 
-float AccelerationStructure::calculateSAH(const int orientation, const std::vector<const Triangle*>& tris, 
-	const Vec3f bounds[2], const float boundary)
-{
-	float sah = 0.0f;
-	int triLeft = 0;
-	int triRight = 0;
-	if (orientation == 0) {
-		assert(bounds[0].x <= boundary && bounds[1].x >= boundary);
-		for (const Triangle* tri : tris) {
-			if (tri->a.x <= boundary || tri->b.x <= boundary || tri->c.x <= boundary)
-				triLeft++;
-			if (tri->a.x >= boundary || tri->b.x >= boundary || tri->c.x >= boundary)
-				triRight++;
-		}
-		sah = triLeft * (boundary - bounds[0].x) + triRight * (bounds[1].x - boundary);
-	}
-	else if (orientation == 1) {
-		assert(bounds[0].y <= boundary && bounds[1].y >= boundary);
-		for (const Triangle* tri : tris) {
-			if (tri->a.y <= boundary || tri->b.y <= boundary || tri->c.y <= boundary)
-				triLeft++;
-			if (tri->a.y >= boundary || tri->b.y >= boundary || tri->c.y >= boundary)
-				triRight++;
-		}
-		sah = triLeft * (boundary - bounds[0].y) + triRight * (bounds[1].y - boundary);
-	}
-	else if (orientation == 2) {
-		assert(bounds[0].z <= boundary && bounds[1].z >= boundary);
-		for (const Triangle* tri : tris) {
-			if (tri->a.z <= boundary || tri->b.z <= boundary || tri->c.z <= boundary)
-				triLeft++;
-			if (tri->a.z >= boundary || tri->b.z >= boundary || tri->c.z >= boundary)
-				triRight++;
-		}
-		sah = triLeft * (boundary - bounds[0].z) + triRight * (bounds[1].z - boundary);
-	}
-	return sah;
-}
-
-float AccelerationStructure::binarySearchSAH(const int orientation, const std::vector<const Triangle*>& tris, 
-	const Vec3f bounds[2], const float left, const float right)
-{
-	float mid = right - (right - left) / 2;
-	if (right - left < 0.1f) return mid;
-	if (calculateSAH(orientation, tris, bounds, mid - 0.05f)
-		< calculateSAH(orientation, tris, bounds, mid + 0.05f)) {
-		return binarySearchSAH(orientation, tris, bounds, left, mid);
-	}
-	else {
-		return binarySearchSAH(orientation, tris, bounds, mid, right);
-	}
-}
-
-float AccelerationStructure::getOptimalSplit(const std::vector<const Triangle*>& tris, const int orientation, 
-	const Vec3f bounds[2], std::vector<const Triangle*>& trisLeft, std::vector<const Triangle*>& trisRight)
-{
-	float splitDist = 0.0f;
-#if 0
-	// divide by equal parts
-	if (orientation == 0) {
-		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).x;
-	}
-	else if (orientation == 1) {
-		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).y;
-	}
-	else if (orientation == 2) {
-		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).z;
-	}
-#elif 1
-	
-	if (orientation == 0) {
-		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].x, bounds[1].x);
-	}
-	else if (orientation == 1) {
-		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].y, bounds[1].y);
-	}
-	else if (orientation == 2) {
-		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].z, bounds[1].z);
-	}
-#else
-	// divide by average
-	if (orientation == 0) {
-		for (const Triangle* const tri : tris)
-			splitDist += tri->a.x + tri->b.x + tri->c.x;
-		splitDist /= 3.0f * tris.size();
-	}
-	else if (orientation == 1) {
-		for (const Triangle* tri : tris)
-			splitDist += tri->a.y + tri->b.y + tri->c.y;
-		splitDist /= 3.0f * tris.size();
-	}
-	else if (orientation == 2) {
-		for (const Triangle* tri : tris)
-			splitDist += tri->a.z + tri->b.z + tri->c.z;
-		splitDist /= 3.0f * tris.size();
-}
-#endif
-
-	// split between left and right (some tris will be dublicated)
-	if (orientation == 0) {
-		for (const Triangle* const tri : tris) {
-			if (tri->a.x <= splitDist || tri->b.x <= splitDist || tri->c.x <= splitDist)
-				trisLeft.push_back(tri);
-			if (tri->a.x >= splitDist || tri->b.x >= splitDist || tri->c.x >= splitDist)
-				trisRight.push_back(tri);
-		}
-	}
-	else if (orientation == 1) {
-		for (const Triangle* tri : tris) {
-			if (tri->a.y <= splitDist || tri->b.y <= splitDist || tri->c.y <= splitDist)
-				trisLeft.push_back(tri);
-			if (tri->a.y >= splitDist || tri->b.y >= splitDist || tri->c.y >= splitDist)
-				trisRight.push_back(tri);
-		}
-	}
-	else if (orientation == 2) {
-		for (const Triangle* tri : tris) {
-			if (tri->a.z <= splitDist || tri->b.z <= splitDist || tri->c.z <= splitDist)
-				trisLeft.push_back(tri);
-			if (tri->a.z >= splitDist || tri->b.z >= splitDist || tri->c.z >= splitDist)
-				trisRight.push_back(tri);
-		}
-	}
-
-	return splitDist;
-}
-
 void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options)
 {
 #ifdef _NO_ACCEL_STRUCT
@@ -335,6 +209,21 @@ bool AccelerationStructure::intersectBox(const Ray& ray) const
 	return true;
 }
 
+int AccelerationStructure::recCountAC(const Ray& ray)
+{
+	if (intersectBox(ray)) {
+		int result = 1;
+		if (left.get() != nullptr)
+			result += left.get()->recCountAC(ray);
+		if (right.get() != nullptr)
+			result += right.get()->recCountAC(ray);
+		return result;
+	}
+	else {
+		return 0;
+	}
+}
+
 bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 	const Triangle*& triPtr, Vec2f& uv) const
 {
@@ -375,3 +264,143 @@ bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 	}
 	return inter;
 }
+
+float AccelerationStructure::calculateSAH(const int orientation, const std::vector<const Triangle*>& tris, 
+	const Vec3f bounds[2], const float boundary)
+{
+	float sah = 0.0f;
+	int triLeft = 0;
+	int triRight = 0;
+	if (orientation == 0) {
+		assert(bounds[0].x <= boundary && bounds[1].x >= boundary);
+		for (const Triangle* tri : tris) {
+			if (tri->a.x <= boundary || tri->b.x <= boundary || tri->c.x <= boundary)
+				triLeft++;
+			if (tri->a.x >= boundary || tri->b.x >= boundary || tri->c.x >= boundary)
+				triRight++;
+		}
+		sah = triLeft * (boundary - bounds[0].x) + triRight * (bounds[1].x - boundary);
+	}
+	else if (orientation == 1) {
+		assert(bounds[0].y <= boundary && bounds[1].y >= boundary);
+		for (const Triangle* tri : tris) {
+			if (tri->a.y <= boundary || tri->b.y <= boundary || tri->c.y <= boundary)
+				triLeft++;
+			if (tri->a.y >= boundary || tri->b.y >= boundary || tri->c.y >= boundary)
+				triRight++;
+		}
+		sah = triLeft * (boundary - bounds[0].y) + triRight * (bounds[1].y - boundary);
+	}
+	else if (orientation == 2) {
+		assert(bounds[0].z <= boundary && bounds[1].z >= boundary);
+		for (const Triangle* tri : tris) {
+			if (tri->a.z <= boundary || tri->b.z <= boundary || tri->c.z <= boundary)
+				triLeft++;
+			if (tri->a.z >= boundary || tri->b.z >= boundary || tri->c.z >= boundary)
+				triRight++;
+		}
+		sah = triLeft * (boundary - bounds[0].z) + triRight * (bounds[1].z - boundary);
+	}
+	return sah;
+}
+
+float AccelerationStructure::binarySearchSAH(const int orientation, const std::vector<const Triangle*>& tris, 
+	const Vec3f bounds[2], const float left, const float right)
+{
+	float mid = right - (right - left) / 2;
+	if (right - left < 0.1f) return mid;
+	if (calculateSAH(orientation, tris, bounds, mid - 0.05f)
+		< calculateSAH(orientation, tris, bounds, mid + 0.05f)) {
+		return binarySearchSAH(orientation, tris, bounds, left, mid);
+	}
+	else {
+		return binarySearchSAH(orientation, tris, bounds, mid, right);
+	}
+}
+
+float AccelerationStructure::getOptimalSplit(const std::vector<const Triangle*>& tris, const int orientation, 
+	const Vec3f bounds[2], std::vector<const Triangle*>& trisLeft, std::vector<const Triangle*>& trisRight)
+{
+	float splitDist = 0.0f;
+#if 0
+	// divide by equal parts
+	if (orientation == 0) {
+		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).x;
+	}
+	else if (orientation == 1) {
+		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).y;
+	}
+	else if (orientation == 2) {
+		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).z;
+	}
+#elif 1
+	// Surface Area Heuristic (SAH)
+	if (orientation == 0) {
+		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].x, bounds[1].x);
+	}
+	else if (orientation == 1) {
+		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].y, bounds[1].y);
+	}
+	else if (orientation == 2) {
+		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].z, bounds[1].z);
+	}
+#else
+	// divide by average
+	if (orientation == 0) {
+		for (const Triangle* const tri : tris)
+			splitDist += tri->a.x + tri->b.x + tri->c.x;
+		splitDist /= 3.0f * tris.size();
+	}
+	else if (orientation == 1) {
+		for (const Triangle* tri : tris)
+			splitDist += tri->a.y + tri->b.y + tri->c.y;
+		splitDist /= 3.0f * tris.size();
+	}
+	else if (orientation == 2) {
+		for (const Triangle* tri : tris)
+			splitDist += tri->a.z + tri->b.z + tri->c.z;
+		splitDist /= 3.0f * tris.size();
+}
+#endif
+
+	// split between left and right (some tris will be dublicated)
+	if (orientation == 0) {
+		for (const Triangle* const tri : tris) {
+			if (tri->a.x <= splitDist || tri->b.x <= splitDist || tri->c.x <= splitDist)
+				trisLeft.push_back(tri);
+			if (tri->a.x >= splitDist || tri->b.x >= splitDist || tri->c.x >= splitDist)
+				trisRight.push_back(tri);
+		}
+	}
+	else if (orientation == 1) {
+		for (const Triangle* tri : tris) {
+			if (tri->a.y <= splitDist || tri->b.y <= splitDist || tri->c.y <= splitDist)
+				trisLeft.push_back(tri);
+			if (tri->a.y >= splitDist || tri->b.y >= splitDist || tri->c.y >= splitDist)
+				trisRight.push_back(tri);
+		}
+	}
+	else if (orientation == 2) {
+		for (const Triangle* tri : tris) {
+			if (tri->a.z <= splitDist || tri->b.z <= splitDist || tri->c.z <= splitDist)
+				trisLeft.push_back(tri);
+			if (tri->a.z >= splitDist || tri->b.z >= splitDist || tri->c.z >= splitDist)
+				trisRight.push_back(tri);
+		}
+	}
+
+	return splitDist;
+}
+
+int AccelerationStructure::countAC(const Ray& ray, const Scene& scene)
+{
+	int sum = 0;
+	for (auto& obj : scene.objects) {
+		if (obj->objectType == ObjectType::Mesh) {
+			Mesh* mesh = dynamic_cast<Mesh*>(obj.get());
+			sum += mesh->ac.get()->recCountAC(ray);
+		}
+	}
+	return sum;
+}
+

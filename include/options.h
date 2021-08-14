@@ -1,3 +1,4 @@
+// class describing options, and namespace for global functions
 #pragma once
 
 #include <string>

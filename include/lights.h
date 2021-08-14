@@ -1,4 +1,4 @@
-// classes describing light sources
+// classes describing light sources such as distant and point light
 #pragma once
 
 #include <vector>

@@ -1,3 +1,4 @@
+// classes describing object primitives, such as sphere and plane
 #include "objects.h"
 #include "timer.h"
 #include "util.h"

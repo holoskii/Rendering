@@ -1,3 +1,4 @@
+// classes describing light sources such as distant and point light
 #include "lights.h"
 
 Light::Light(const Vec3f& a_color, const float& a_intensity)

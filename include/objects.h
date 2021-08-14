@@ -1,4 +1,4 @@
-// classes describing objects: primitives like sphere and plane and polygon mesh
+// classes describing object primitives, such as sphere and plane
 #pragma once
 
 #include <vector>

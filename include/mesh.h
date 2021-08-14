@@ -1,5 +1,4 @@
-// class storing polygon mesh data, and acceleration structure 
-// that speeds up ray-polygon intersection
+// classes describing polygon mesh, single polygon and acceleration structure
 #pragma once
 
 class Mesh;
@@ -51,13 +50,15 @@ public:
 	void setup(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options);
 	bool intersectBox(const Ray& ray) const;
 	bool intersectAccelStruct(const Ray& ray, float& t0, const Triangle*& triPtr, Vec2f& uv) const;
-
+	int recCountAC(const Ray& ray);
+	
 	static float calculateSAH(const int orientation, const std::vector<const Triangle*>& tris,
 		const Vec3f bounds[2], const float boundary);
 	static float binarySearchSAH(const int orientation, const std::vector<const Triangle*>& tris,
 		const Vec3f bounds[2], const float left, const float right);
 	static float getOptimalSplit(const std::vector<const Triangle*>& tris, const int orientation,
 		const Vec3f bounds[2], std::vector<const Triangle*>& trisLeft, std::vector<const Triangle*>& trisRight);
+	static int countAC(const Ray& ray, const Scene& scene);
 
 	std::unique_ptr<AccelerationStructure> left;
 	std::unique_ptr<AccelerationStructure> right;

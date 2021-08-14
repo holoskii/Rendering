@@ -1,3 +1,4 @@
+// utility functions and functions working with file IO
 #include "util.h"
 
 #define NOMINMAX
@@ -45,6 +46,7 @@ int savePPM(Vec3f* frameBuffer, const Options& options)
 
 Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, const Options& options)
 {
+	// fast unsigned int read
     auto getUInt = [](const char* & ptr)
     {
         size_t val = 0;
@@ -74,10 +76,12 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
 #endif // _NO_OUTPUT
     
     do {
+		// read line and drop commented part
         std::getline(ifs, line);
         if (line.find('#') != std::string::npos) line.erase(line.find('#'));
         if (line.length() <= 0) continue;
 
+		// separate line header
         const char* c_line = line.c_str();
         char lineHeader[32] = { 0 };
         int res = sscanf_s(c_line, "%s", lineHeader, 32u);
@@ -88,6 +92,7 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
         c_line += strlen(lineHeader) + 1;
 
         if (strcmp(lineHeader, "v") == 0) {
+			// read vertex
             float x, y, z;
             int res = sscanf(c_line, "%f %f %f", &x, &y, &z);
             assert(res == 3);
@@ -97,14 +102,16 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
             vertexData.emplace_back(Vec3f(x, y, z));
         }
         else if (strcmp(lineHeader, "vn") == 0) {
+			// read normal
             float x, y, z;
             int res = sscanf_s(c_line, "%f %f %f", &x, &y, &z);
             assert(res == 3);
             normalData.emplace_back(Vec3f{ x, y, z }.normalize());
         }
         else if (strcmp(lineHeader, "f") == 0) {
-            
+			// read face
             if (!normalized) {
+				// normalize all vertices
                 normalized = true;
 				Vec3f range = max - min;
 				Vec3f stretch = size / range;
@@ -132,6 +139,7 @@ Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, 
                 mesh->ac->setBounds(pos - normSize / 2, pos + normSize / 2);
             }
 
+			// add face
             int slashCount = 0;
             const char* ptr = c_line;
             while (*ptr) if (*ptr++ == '/') slashCount++;
@@ -386,24 +394,4 @@ bool loadScene(Scene& scene, Options& options, const std::string& sceneName)
 	}
 	std::cout << "Scene wasn't loaded\n";
 	return false;
-}
-
-int recInterAC(const Ray& ray, AccelerationStructure* ac)
-{
-	if (ac == nullptr)
-		return 0;
-	if (ac->intersectBox(ray))
-		return 1 + recInterAC(ray, ac->left.get()) + recInterAC(ray, ac->right.get());
-}
-
-int interAC(const Ray& ray, const ObjectVector& objects, const Options& options)
-{
-	int sum = 0;
-	for (auto& obj : objects) {
-		if (obj->objectType == ObjectType::Mesh) {
-			Mesh* mesh = dynamic_cast<Mesh*>(obj.get());
-			sum += recInterAC(ray, mesh->ac.get());
-		}
-	}
-	return sum;
 }
