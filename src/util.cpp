@@ -241,6 +241,26 @@ bool loadScene(Scene& scene, Options& options, const std::string& sceneName)
 						options.maxDepthAccelStruct = strToInt(str.substr(str.find('=') + 1));
 					else if (strv.find("ac_min_batch") != std::string::npos)
 						options.minBatchSizeAccelStruct = strToInt(str.substr(str.find('=') + 1));
+					else if (strv.find("position") != std::string::npos) {
+						std::vector<std::string> res;
+						std::stringstream lineStream(str.substr(str.find('=') + 1));
+						std::string cell;
+						while (std::getline(lineStream, cell, ','))
+							res.push_back(cell);
+						assert(res.size() == 3);
+						Vec3f pos = { strToFloat(res[0]), strToFloat(res[1]), strToFloat(res[2]) };
+						scene.camera.pos = pos;
+					}
+					else if (strv.find("rotation") != std::string::npos) {
+						std::vector<std::string> res;
+						std::stringstream lineStream(str.substr(str.find('=') + 1));
+						std::string cell;
+						while (std::getline(lineStream, cell, ','))
+							res.push_back(cell);
+						assert(res.size() == 3);
+						Vec3f rot = { strToFloat(res[0]), strToFloat(res[1]), strToFloat(res[2]) };
+						scene.camera.rot = rot;
+					}
 				}
 				else if (blockType == BlockType::Light) {
 					options::combineWithGlobal(options);
@@ -372,9 +392,8 @@ int recInterAC(const Ray& ray, AccelerationStructure* ac)
 {
 	if (ac == nullptr)
 		return 0;
-	if (ac->intersectBox(ray)) {
+	if (ac->intersectBox(ray))
 		return 1 + recInterAC(ray, ac->left.get()) + recInterAC(ray, ac->right.get());
-	}
 }
 
 int interAC(const Ray& ray, const ObjectVector& objects, const Options& options)

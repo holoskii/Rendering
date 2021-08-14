@@ -10,11 +10,44 @@
 #include "options.h"
 #include "util.h"
 
-Ray::Ray(const Vec3f& a_orig, const Vec3f& a_dir, const RayType a_rayType)
-	: orig(a_orig), dir(a_dir), rayType(a_rayType) {}
 
 Camera::Camera(const Vec3f& a_pos, const Vec3f& a_rot)
-	: pos(a_pos), rot(a_rot) {}
+	: pos(a_pos), rot(a_rot) 
+{
+	const float& x = degToRad(rot.x);
+	Matrix44f mx(
+		1, 0, 0, 0,
+		0, cosf(x), -sinf(x), 0,
+		0, sinf(x), cosf(x), 0,
+		0, 0, 0, 1
+	);
+
+	const float& y = degToRad(rot.y);
+	Matrix44f my(
+		cosf(y), 0, sinf(y), 0,
+		0, 1, 0, 0,
+		-sinf(y), 0, cosf(y), 0,
+		0, 0, 0, 1
+	);
+
+	const float& z = degToRad(rot.z);
+	Matrix44f mz(
+		cosf(z), -sinf(z), 0, 0,
+		sinf(z), cosf(z), 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	);
+
+	rMatrix = mz * my * mx;
+}
+
+Ray Camera::getRay(const float xPix, const  float yPix)
+{
+	Vec3f dir = rMatrix.multVecMatrix(Vec3f(xPix, yPix, -1).normalize());
+	return Ray{ this->pos , dir };
+}
+
+
 
 Vec3f Renderer::reflect(const Vec3f& dir, const Vec3f& normal)
 {
@@ -187,19 +220,13 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 #endif // _PROGRESS_OUTPUT
 #endif // _DEBUG && _PROGRESS_OUTPUT
 
-	const Vec3f orig = { 0, 0, 0 };
 	const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
-	float imageAspectRatio = (options.width) / (float)options.height;
+	const float imageAspectRatio = (options.width) / (float)options.height;
 	for (size_t y = y0; y < y1; y++) {
 		for (size_t x = 0; x < options.width; x++) {
-			if (x == 350 && y == 100) {
-				// std::cout << "Now\n";
-				//frameBuffer[x + y * options.width] = { 1 };
-				//continue;
-			}
 			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
 			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
-			Ray ray{ orig, Vec3f(xPix, yPix, -1).normalize() };
+			Ray ray = this->camera.getRay(xPix, yPix);
 			frameBuffer[x + y * options.width] = Renderer::castRay(ray, *this, 0);
 			finishedPixels.store(finishedPixels.load() + 1);
 		}
@@ -278,6 +305,7 @@ int Scene::render()
 			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
 			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
 			Vec3f dir = Vec3f(xPix, yPix, -1).normalize();
+			ray.transform
 			int val = interAC(orig, dir, objects, options);
 			if (val > acMax) acMax = val;
 			acBuffer[x + y * options.width] = val;
@@ -288,7 +316,7 @@ int Scene::render()
 		for (size_t x = 0; x < options.width; x++) {
 			float val = acBuffer[x + y * options.width];
 			val /= acMax;
-			frameBuffer[x + y * options.width] += Vec3f{ val };
+			frameBuffer[x + y * options.width] = Vec3f{ val };
 		}
 	}
 	delete[] acBuffer;

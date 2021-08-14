@@ -17,7 +17,12 @@ inline float modulo(const float& f)
 
 inline float degToRad(const float& f)
 {
-	return f * M_PI / 180;
+	return f * (M_PI / 180.0f);
+}
+
+inline float radToDeg(const float& f)
+{
+	return f * (180.0f / M_PI);
 }
 
 inline float clamp(const float low, const float high, const float val)

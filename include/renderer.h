@@ -12,25 +12,17 @@ struct IntersectInfo;
 #include "mesh.h"
 #include "options.h"
 
-enum class RayType { PrimaryRay, ShadowRay };
 
-class Ray
-{
-public:
-	RayType rayType;
-	Vec3f orig;
-	Vec3f dir;
-	
-	Ray(const Vec3f& a_orig = { 0,0,0 }, const Vec3f& a_dir = { 0,0,-1 }, const RayType a_rayType = RayType::PrimaryRay);
-};
 
 class Camera
 {
 public:
 	Vec3f pos;
 	Vec3f rot;
+	Matrix44f rMatrix;
 
 	Camera(const Vec3f& a_pos = { 0, 0, 0 }, const Vec3f& a_rot = { 0, 0, 0 });
+	Ray getRay(const float xPix, const  float yPix);
 };
 
 class Scene
@@ -41,7 +33,7 @@ public:
 	ObjectVector objects;
 	LightsVector lights;
 	Options options;
-	// Camera cam;
+	Camera camera;
 
 	std::atomic<int> finishedPixels{ 0 };
 	std::atomic<int> finishedWorkers{ 0 };

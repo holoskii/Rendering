@@ -225,9 +225,7 @@ public:
 	Matrix44 operator * (const Matrix44& v) const
 	{
 		Matrix44 tmp;
-		multiply(*this, v, tmp);
-
-		return tmp;
+		return multiply(*this, v);
 	}
 
 	static Matrix44 multiply(const Matrix44<T>& a, const Matrix44& b)
@@ -281,15 +279,16 @@ public:
 		Vec3f dst;
 		S a, b, c, w;
 
-		a = src[0] * x[0][0] + src[1] * x[1][0] + src[2] * x[2][0] + x[3][0];
-		b = src[0] * x[0][1] + src[1] * x[1][1] + src[2] * x[2][1] + x[3][1];
-		c = src[0] * x[0][2] + src[1] * x[1][2] + src[2] * x[2][2] + x[3][2];
+		dst.x = src[0] * x[0][0] + src[1] * x[1][0] + src[2] * x[2][0] + x[3][0];
+		dst.y = src[0] * x[0][1] + src[1] * x[1][1] + src[2] * x[2][1] + x[3][1];
+		dst.z = src[0] * x[0][2] + src[1] * x[1][2] + src[2] * x[2][2] + x[3][2];
 		w = src[0] * x[0][3] + src[1] * x[1][3] + src[2] * x[2][3] + x[3][3];
 
 		if (w != 0.0f && w != -0.0f && w != 1.0f) {
-			dst.x = a / w;
-			dst.y = b / w;
-			dst.z = c / w;
+			const float wInv = 1.0f / w;
+			dst.x *= wInv;
+			dst.y *= wInv;
+			dst.z *= wInv;
 		}
 		return dst;
 	}
@@ -411,3 +410,15 @@ public:
 	}
 };
 typedef Matrix44<float> Matrix44f;
+
+enum class RayType { PrimaryRay, ShadowRay };
+class Ray
+{
+public:
+	RayType rayType;
+	Vec3f orig;
+	Vec3f dir;
+
+	Ray(const Vec3f& a_orig = { 0,0,0 }, const Vec3f& a_dir = { 0,0,-1 }, const RayType a_rayType = RayType::PrimaryRay)
+		: orig(a_orig), dir(a_dir), rayType(a_rayType) {}
+};
