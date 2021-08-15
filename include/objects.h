@@ -28,7 +28,7 @@ public:
 	virtual void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, 
 		const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const = 0;
 
-	Vec3f center;
+	Vec3f pos;
 	Vec3f color;
 	MaterialType materialType;
 	ObjectType objectType = ObjectType::Object;

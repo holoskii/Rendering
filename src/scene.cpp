@@ -53,6 +53,10 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 	const float imageAspectRatio = (options.width) / (float)options.height;
 	for (size_t y = y0; y < y1; y++) {
 		for (size_t x = 0; x < options.width; x++) {
+			if (x == 470 && y == 380) {
+				//frameBuffer[x + y * options.width] = { 1,0,0 };
+				//continue;
+			}
 			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
 			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
 			Ray ray = this->camera.getRay(xPix, yPix);
@@ -74,12 +78,19 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 
 Scene::Scene(const std::string& sceneName)
 {
-	sceneLoadSuccess = loadScene(*this, this->options, sceneName);
+	sceneLoadSuccess = loadScene(*this, sceneName);
 }
 
 int Scene::launchWorkers(Vec3f* frameBuffer)
 {
 	Timer t("Render scene");
+
+#ifdef _SINGLE_THREAD
+	renderWorker(frameBuffer, 0, options.height);
+	return 0;
+#endif
+
+
 #ifndef _DEBUG
 	std::vector<std::unique_ptr<std::thread>> threadPool;
 	for (size_t i = 0; i < options.nWorkers; i++) {

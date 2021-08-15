@@ -27,8 +27,7 @@ public:
 class DistantLight : public Light
 {
 public:
-	DistantLight();
-	DistantLight(const Vec3f& a_dir, const Vec3f& a_color = 1, const float& a_intensity = 1);
+	DistantLight(const Vec3f& a_dir = { 0, 0, -1 }, const Vec3f& a_color = 1, const float& a_intensity = 1);
 	void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const;
 
 	Vec3f dir;
@@ -37,7 +36,7 @@ public:
 class PointLight : public Light
 {
 public:
-	PointLight(const Vec3f& a_pos, const Vec3f& a_color = 1, const float& a_intensity = 1);
+	PointLight(const Vec3f& a_pos = { 0, 0, 0 }, const Vec3f& a_color = 1, const float& a_intensity = 1);
 	void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const;
 
 	Vec3f pos;

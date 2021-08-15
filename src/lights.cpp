@@ -5,12 +5,6 @@ Light::Light(const Vec3f& a_color, const float& a_intensity)
 	: color(a_color), intensity(a_intensity) {}
 
 
-DistantLight::DistantLight()
-	: Light(), dir(Vec3f{ 0, -1, 0 })
-{
-	type = LightType::DistantLight;
-}
-
 DistantLight::DistantLight(const Vec3f& a_dir, const Vec3f& a_color, const float& a_intensity)
 	: Light(a_color, a_intensity), dir(a_dir)
 {

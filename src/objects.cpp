@@ -5,7 +5,7 @@
 #include "renderer.h"
 
 Object::Object(const Vec3f& a_center, const Vec3f& a_color, const MaterialType& a_materialType)
-	: color(a_color), center(a_center), materialType(a_materialType) {}
+	: color(a_color), pos(a_center), materialType(a_materialType) {}
 
 Object::~Object() {}
 
@@ -39,7 +39,7 @@ Sphere::Sphere(const Vec3f& a_center, const float a_r, const Vec3f& a_color,
 
 bool Sphere::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const
 {
-	Vec3f L = center - orig;
+	Vec3f L = pos - orig;
 	float tca = L.dotProduct(dir);
 	float d2 = L.dotProduct(L) - tca * tca;
 	if (d2 > r2) return false;
@@ -54,7 +54,7 @@ bool Sphere::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec
 void Sphere::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv, 
 	Vec3f& hitNormal, Vec2f& tex) const
 {
-	hitNormal = hitPoint - center;
+	hitNormal = hitPoint - pos;
 	hitNormal.normalize();
 
 	tex.x = (1.0f + atan2(hitNormal.z, hitNormal.x) / M_PI) * 0.5f;
@@ -75,7 +75,7 @@ bool Plane::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2
 	float denom = dir.dotProduct(normal);
 	if (fabs(denom) < 1e-8)
 		return false;
-	t0 = ((center - orig).dotProduct(normal)) / denom;
+	t0 = ((pos - orig).dotProduct(normal)) / denom;
 	return (t0 >= 0);
 }
 
@@ -84,7 +84,7 @@ void Plane::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, 
 {
 	hitNormal = normal;
 
-	Vec3f dist = hitPoint - center;
+	Vec3f dist = hitPoint - pos;
 	tex.x = dist.x / 15;
 	tex.y = dist.z / 15;
 }

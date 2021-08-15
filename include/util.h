@@ -1,6 +1,8 @@
 // utility functions and functions working with file IO
 #pragma once
 
+#include <iostream>
+#include <vector>
 #include <cmath>
 #include <sstream>
 #include <cassert>
@@ -32,27 +34,50 @@ inline float radToDeg(const float& f)
 	return f * (180.0f / M_PI);
 }
 
-inline int strToInt(const std::string& str)
+inline int strToInt(const std::string_view& str)
 {
 	int result = 0;
-	std::stringstream ss{ str };
+	std::stringstream ss{ std::string(str) };
 	ss >> result;
 	assert(ss.eof() || ss.good());
 	return result;
 }
 
-inline float strToFloat(const std::string& str)
+inline float strToFloat(const std::string_view& str)
 {
 	float result = 0;
-	std::stringstream ss{ str };
+	std::stringstream ss{ std::string(str) };
 	ss >> result;
 	assert(ss.eof() || ss.good());
 	return result;
 }
 
+inline Vec3f str3ToFloat(std::vector<std::string> vec)
+{
+	assert(vec.size() == 3);
+	return Vec3f{ strToFloat(vec[0]), strToFloat(vec[1]), strToFloat(vec[2]) };
+}
+
+inline std::vector<std::string> splitString(const std::string_view& str, const char delim)
+{
+	std::vector<std::string> res;
+	std::stringstream lineStream{ std::string(str) };
+	std::string cell;
+	while (std::getline(lineStream, cell, delim))
+		res.push_back(cell);
+	return res;
+}
+
+inline bool strContains(const std::string_view& str, const std::string_view& substr)
+{
+	return str.find(substr) != std::string::npos;
+};
+
+inline bool strEquals(const std::string_view& str1, const std::string_view& str2)
+{
+	return str1.compare(str2) == 0;
+};
 
 int savePPM(Vec3f* frameBuffer, const Options& options);
 
-Mesh* loadOBJ(const std::string& filename, const Vec3f& pos, const Vec3f& size, const Options& options);
-
-bool loadScene(Scene& scene, Options& options, const std::string& sceneName);
+bool loadScene(Scene& scene, const std::string& sceneName);

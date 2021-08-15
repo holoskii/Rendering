@@ -35,7 +35,11 @@ public:
 		Vec2f& uv) const;
 	void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr,
 		const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const;
+	bool loadOBJ(const std::string& filename, const Options& options);
 
+
+	Vec3f size;
+	Vec3f rot;
 	std::vector<const Triangle*> allTris;
 	std::unique_ptr<AccelerationStructure> ac;
 };

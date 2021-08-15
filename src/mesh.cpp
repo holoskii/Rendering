@@ -5,9 +5,11 @@
 #include <tuple>
 #include <queue>
 #include <functional>
+#include <fstream>
 
 #include "stats.h"
 #include "options.h"
+#include "timer.h"
 
 Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c)
 	: a(a_a), b(a_b), c(a_c)
@@ -101,6 +103,189 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, c
 	hitNormal = (v1 - v0).crossProduct(v2 - v0).normalize();
 #endif
 	tex = Vec2f{ uv.x, uv.y };
+}
+
+bool Mesh::loadOBJ(const std::string& filename, const Options& options)
+{
+	const float& x = degToRad(rot.x);
+	Matrix44f mx(
+		1, 0, 0, 0,
+		0, cosf(x), -sinf(x), 0,
+		0, sinf(x), cosf(x), 0,
+		0, 0, 0, 1
+	);
+
+	const float& y = degToRad(rot.y);
+	Matrix44f my(
+		cosf(y), 0, sinf(y), 0,
+		0, 1, 0, 0,
+		-sinf(y), 0, cosf(y), 0,
+		0, 0, 0, 1
+	);
+
+	const float& z = degToRad(rot.z);
+	Matrix44f mz(
+		cosf(z), -sinf(z), 0, 0,
+		sinf(z), cosf(z), 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	);
+
+	Matrix44f rMatrix = mz * my * mx;
+
+	// fast unsigned int read
+	auto getUInt = [](const char*& ptr)
+	{
+		size_t val = 0;
+		while (*ptr == ' ') ptr++;
+		if (*ptr == '/') ptr++;
+		while (*ptr && *ptr != ' ' && *ptr != '/')
+			val = val * 10 + *ptr++ - '0';
+		return val;
+};
+
+	Timer t("OBJ loading");
+	std::ifstream ifs(filename, std::ios::in);
+	if (!ifs.good()) return false;
+
+	ac = std::make_unique<AccelerationStructure>();
+	std::string line;
+	bool normalized = false;
+	std::vector<Vec3f> vertexData;
+	std::vector<Vec3f> normalData;
+	std::vector<const Triangle*> tris;
+	Vec3f min = { std::numeric_limits<float>::max() };
+	Vec3f max = { std::numeric_limits<float>::min() };
+
+#ifndef _NO_OUTPUT
+	std::cout << "Mesh: " << filename << '\n';
+#endif // _NO_OUTPUT
+
+	do {
+		// read line and drop commented part
+		std::getline(ifs, line);
+
+		if (line.find('#') != std::string::npos) line.erase(line.find('#'));
+		if (line.length() <= 0) continue;
+
+		// separate line header
+		const char* c_line = line.c_str();
+		char lineHeader[32] = { 0 };
+		int res = sscanf_s(c_line, "%s", lineHeader, 32u);
+		if (res == 0) {
+			return false;
+		}
+		c_line += strlen(lineHeader) + 1;
+
+		if (strcmp(lineHeader, "v") == 0) {
+			// read vertex
+			float x, y, z;
+			int res = sscanf(c_line, "%f %f %f", &x, &y, &z);
+			assert(res == 3);
+			min.x = std::min(x, min.x); min.y = std::min(y, min.y);
+			min.z = std::min(z, min.z); max.x = std::max(x, max.x);
+			max.y = std::max(y, max.y); max.z = std::max(z, max.z);
+			vertexData.emplace_back(Vec3f(x, y, z));
+		}
+		else if (strcmp(lineHeader, "vn") == 0) {
+			// read normal
+			float x, y, z;
+			int res = sscanf_s(c_line, "%f %f %f", &x, &y, &z);
+			assert(res == 3);
+			normalData.emplace_back(Vec3f{ x, y, z }.normalize());
+		}
+		else if (strcmp(lineHeader, "f") == 0) {
+			// read face
+			if (!normalized) {
+				// normalize all vertices
+				normalized = true;
+				Vec3f range = max - min;
+				Vec3f stretch = size / range;
+				float maxStretch = std::max(stretch.x, std::max(stretch.y, stretch.z));
+
+				Vec3f normSize = size;
+				if (maxStretch == stretch.x) {
+					normSize.y = normSize.x / (range.x / range.y);
+					normSize.z = normSize.x / (range.x / range.z);
+				}
+				else if (maxStretch == stretch.y) {
+					normSize.x = normSize.y / (range.y / range.x);
+					normSize.z = normSize.y / (range.y / range.z);
+				}
+				else {
+					normSize.x = normSize.z / (range.z / range.x);
+					normSize.y = normSize.z / (range.z / range.y);
+				}
+
+				for (auto& v : vertexData) {
+					v.x = normSize.x * ((v.x - min.x) / range.x - 0.5f);
+					v.y = normSize.y * ((v.y - min.y) / range.y - 0.5f);
+					v.z = normSize.z * ((v.z - min.z) / range.z - 0.5f);
+
+					v = rMatrix.multVecMatrix(v);
+
+					v.x += pos.x;
+					v.y += pos.y;
+					v.z += pos.z;
+				}
+
+				for (auto& n : normalData) {
+					n = rMatrix.multVecMatrix(n);
+				}
+
+				ac->setBounds(pos - normSize / 2, pos + normSize / 2);
+			}
+
+			// add face
+			int slashCount = 0;
+			const char* ptr = c_line;
+			while (*ptr) if (*ptr++ == '/') slashCount++;
+			ptr = c_line;
+
+			if (slashCount == 0) {
+				std::vector<size_t> vi;
+				size_t v = 1;
+				while ((v = getUInt(ptr)) > 0)
+					vi.push_back(v);
+				for (size_t i = 1; i < vi.size() - 1; i++)
+					tris.push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
+			}
+			else if (slashCount % 2 == 0) {
+				std::vector<size_t> vi, ti, ni;
+				size_t v = 1, t = 1, n = 1;
+				while ((v = getUInt(ptr)) > 0) {
+					t = getUInt(ptr);
+					n = getUInt(ptr);
+					vi.push_back(v);
+					if (t > 0) ti.push_back(t);
+					if (n > 0) ni.push_back(n);
+				}
+				if (ni.size() == 0) {
+					for (size_t i = 1; i < vi.size() - 1; i++)
+						tris.push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
+				}
+				else {
+					assert(ni.size() == vi.size());
+					for (size_t i = 1; i < vi.size() - 1; i++)
+						tris.push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
+							normalData.at(ni.at(0) - 1), normalData.at(ni.at(i) - 1), normalData.at(ni.at(i + 1) - 1)));
+				}
+			}
+			else {
+				std::cout << "unhandled slash count: " << slashCount << '\n';
+			}
+		}
+	} while (ifs.good());
+	ifs.close();
+
+	allTris.reserve(tris.size());
+	for (const Triangle* tri : tris)
+		allTris.push_back(tri);
+	ac->setup(tris, 1, options);
+#ifdef _STATS
+	stats::meshCount.store(stats::meshCount.load() + allTris.size());
+#endif // _STATS
+	return true;
 }
 
 
