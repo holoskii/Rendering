@@ -8,9 +8,7 @@
 #include <cassert>
 
 #include "geometry.h"
-#include "scene.h"
 #include "options.h"
-#include "mesh.h"
 
 constexpr float M_PI = 3.14159265358979323846f;
 
@@ -80,4 +78,10 @@ inline bool strEquals(const std::string_view& str1, const std::string_view& str2
 
 int savePPM(Vec3f* frameBuffer, const Options& options);
 
-bool loadScene(Scene& scene, const std::string& sceneName);
+#define LOG_ERROR logError(__FILE__, __FUNCSIG__, __LINE__);
+
+inline void logError(const char* file, const char* func, int line)
+{
+	std::cout << "Error: " << file << ' ' << func << ' ' << line << '\n';
+}
+

@@ -1,5 +1,6 @@
-#include "renderer.h"
 #include <iostream>
+
+#include "scene.h"
 
 int main()
 {

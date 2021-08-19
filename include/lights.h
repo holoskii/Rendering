@@ -11,7 +11,6 @@ using LightsVector = std::vector<std::unique_ptr<Light>>;
 enum class LightType { BaseLight, DistantLight, PointLight };
 
 #include "geometry.h"
-#include "util.h"
 
 class Light
 {
