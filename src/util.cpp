@@ -11,9 +11,9 @@
 
 #include "options.h"
 
-int savePPM(Vec3f* frameBuffer, const Options& options)
+int saveImage(Vec3f* frameBuffer, const Options& options)
 {
-    std::string path = options.imagePath + "\\" + options.imageName;
+    std::string path = options.imagePath + "\\" + options.imageName + std::string(".ppm");
     std::ofstream of(path, std::ios::out | std::ios::binary);
     if (!of.good()) {
         std::cout << "Error during file output\n";

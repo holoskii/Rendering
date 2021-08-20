@@ -16,7 +16,7 @@ public:
 	int nWorkers = 8;
 
 	std::string imagePath = "D:\\dev\\CG\\RayTracing";
-	std::string imageName = "out.ppm";
+	std::string imageName = "out";
 	Vec3f backgroundColor{ 0.0f, 0.0f, 0.0f };
 
 	int minBatchSizeAccelStruct = 10;
@@ -26,6 +26,8 @@ public:
 
 namespace options
 {
+	inline bool useAreaLightAcceleration = 1;
+
 	inline Options globalOptions;
 	inline bool useGlobal_width = false;
 	inline bool useGlobal_height = false;

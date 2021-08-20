@@ -8,8 +8,10 @@ class Light;
 class DistantLight;
 class PointLight;
 using LightsVector = std::vector<std::unique_ptr<Light>>;
-enum class LightType { BaseLight, DistantLight, PointLight };
+enum class LightType { BaseLight, DistantLight, PointLight, AreaLight };
 
+class Object;
+using ObjectVector = std::vector<std::unique_ptr<Object>>;
 #include "geometry.h"
 
 class Light
@@ -39,4 +41,23 @@ public:
 	void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const;
 
 	Vec3f pos;
+};
+
+class AreaLight : public Light
+{
+public:
+	AreaLight();
+	void setPoints();
+	void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const;
+	Vec3f getTotalIlluminance(const Vec3f& hitPoint, const Vec3f& hitNormal, const ObjectVector& objects);
+
+	Vec3f pos;
+	Vec3f i;
+	Vec3f j;
+	int samples = 1;
+	int base_samples = 1;
+
+	bool pointsCreated = false;
+	std::vector<Vec3f> basePoints;
+	std::vector<Vec3f> points;
 };

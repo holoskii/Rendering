@@ -9,37 +9,39 @@
 #include "util.h"
 
 Camera::Camera(const Vec3f& a_pos, const Vec3f& a_rot)
-	: pos(a_pos), rot(a_rot)
-{
-	const float& x = degToRad(rot.x);
-	Matrix44f mx(
-		1, 0, 0, 0,
-		0, cosf(x), -sinf(x), 0,
-		0, sinf(x), cosf(x), 0,
-		0, 0, 0, 1
-	);
-
-	const float& y = degToRad(rot.y);
-	Matrix44f my(
-		cosf(y), 0, sinf(y), 0,
-		0, 1, 0, 0,
-		-sinf(y), 0, cosf(y), 0,
-		0, 0, 0, 1
-	);
-
-	const float& z = degToRad(rot.z);
-	Matrix44f mz(
-		cosf(z), -sinf(z), 0, 0,
-		sinf(z), cosf(z), 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1
-	);
-
-	rMatrix = mz * my * mx;
-}
+	: pos(a_pos), rot(a_rot) {}
 
 Ray Camera::getRay(const float xPix, const  float yPix)
 {
+	if (!cameraRotated) {
+		cameraRotated = true;
+		const float& x = degToRad(rot.x);
+		Matrix44f mx(
+			1, 0, 0, 0,
+			0, cosf(x), -sinf(x), 0,
+			0, sinf(x), cosf(x), 0,
+			0, 0, 0, 1
+		);
+
+		const float& y = degToRad(rot.y);
+		Matrix44f my(
+			cosf(y), 0, sinf(y), 0,
+			0, 1, 0, 0,
+			-sinf(y), 0, cosf(y), 0,
+			0, 0, 0, 1
+		);
+
+		const float& z = degToRad(rot.z);
+		Matrix44f mz(
+			cosf(z), -sinf(z), 0, 0,
+			sinf(z), cosf(z), 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1
+		);
+
+		rMatrix = mz * my * mx;
+	}
+
 	Vec3f dir = rMatrix.multVecMatrix(Vec3f(xPix, yPix, -1).normalize());
 	return Ray{ this->pos , dir };
 }
@@ -185,6 +187,8 @@ bool Scene::loadScene(const std::string& sceneName)
                     light = new DistantLight();
                 else if (strEquals(value, "point"))
                     light = new PointLight();
+				else if (strEquals(value, "area"))
+					light = new AreaLight();
             }
             else if (light == nullptr)
                 std::cout << "Error, light type missing\n";
@@ -200,6 +204,26 @@ bool Scene::loadScene(const std::string& sceneName)
                 assert(light->type == LightType::PointLight);
                 static_cast<PointLight*>(light)->pos = str3ToFloat(splitString(value, ','));
             }
+			else if (strEquals(key, "pos")) {
+				assert(light->type == LightType::AreaLight);
+				static_cast<AreaLight*>(light)->pos = str3ToFloat(splitString(value, ','));
+			}
+			else if (strEquals(key, "i")) {
+				assert(light->type == LightType::AreaLight);
+				static_cast<AreaLight*>(light)->i = str3ToFloat(splitString(value, ','));
+			}
+			else if (strEquals(key, "j")) {
+				assert(light->type == LightType::AreaLight);
+				static_cast<AreaLight*>(light)->j = str3ToFloat(splitString(value, ','));
+			}
+			else if (strEquals(key, "samples")) {
+				assert(light->type == LightType::AreaLight);
+				static_cast<AreaLight*>(light)->samples = strToInt(value);
+			}
+			else if (strEquals(key, "base_samples")) {
+				assert(light->type == LightType::AreaLight);
+				static_cast<AreaLight*>(light)->base_samples = strToInt(value);
+			}
         }
         else if (blockType == BlockType::Object) {
             assert(strContains(str, "="));
@@ -232,6 +256,7 @@ bool Scene::loadScene(const std::string& sceneName)
                 auto res = splitString(value, ',');
                 if (strEquals(res[0], "transparent")) {
                     object->materialType = MaterialType::Transparent;
+					object->indexOfRefraction = strToFloat(res[2]);
                 }
                 else if (strEquals(res[0], "reflective")) {
                     object->materialType = MaterialType::Reflective;
@@ -286,7 +311,6 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 	renderWorker(frameBuffer, 0, options.height);
 	return 0;
 #endif
-
 
 #ifndef _DEBUG
 	std::vector<std::unique_ptr<std::thread>> threadPool;
@@ -359,7 +383,7 @@ long long Scene::render()
 #endif // _SHOW_AC
 
 #ifndef _NO_IMAGE_OUTPUT
-	savePPM(frameBuffer, options);
+	saveImage(frameBuffer, options);
 #endif // _NO_OUTPUT
 	delete[] frameBuffer;
 
@@ -473,11 +497,6 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 	if (depth > scene.options.maxRayDepth) return scene.options.backgroundColor;
 	IntersectInfo intrInfo;
 	if (trace(ray, scene.objects, intrInfo)) {
-		//return Vec3f{ 1.0f };
-		/*if (intrInfo.hitObject->objectType == ObjectType::Mesh) {
-			const Mesh* mesh = dynamic_cast<const Mesh*>(intrInfo.hitObject);
-			AccelerationStructure ac = static_cast<Mesh*>()->accelStruct;
-		}*/
 		Vec3f hitColor = intrInfo.hitObject->color;
 		Vec3f hitNormal;
 		Vec2f hitTexCoordinates;
@@ -490,13 +509,42 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 		if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
 			// for diffuse objects collect light from all visible sources
 			for (size_t i = 0; i < scene.lights.size(); ++i) {
-				IntersectInfo intrShadInfo;
-				Vec3f lightDir, lightIntensity;
-				scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
-				bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, intrShadInfo);
-				float pattern = intrInfo.hitObject->getPattern(hitTexCoordinates);
-				hitColor += (objectColor * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
+				if (scene.lights[i]->type == LightType::AreaLight) {
+					AreaLight* light = dynamic_cast<AreaLight*>(scene.lights[i].get());
+					Vec3f intensity = light->getTotalIlluminance(hitPoint + hitNormal * scene.options.bias, hitNormal, scene.objects);
+					hitColor += objectColor * intensity;
+				}
+				else {
+					IntersectInfo intrShadInfo;
+					Vec3f lightDir, lightIntensity;
+					scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
+					bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, intrShadInfo);
+					float pattern = intrInfo.hitObject->getPattern(hitTexCoordinates);
+					hitColor += (objectColor * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
+				}
 			}
+		}
+		else if (intrInfo.hitObject->materialType == MaterialType::Phong) {
+			std::cout << "No phong yet\n";
+			//Vec3f diffuseLight = 0, specularLight = 0;
+			//for (uint32_t i = 0; i < scene.lights.size(); ++i) {
+			//	Vec3f lightDir, lightIntensity;
+			//	IntersectInfo isectShad;
+			//	scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, isectShad.tNear);
+
+			//	bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, isectShad);
+
+			//	// compute the diffuse component
+			//	diffuseLight += vis * intrInfo.hitObject->difuse * lightIntensity * std::max(0.f, hitNormal.dotProduct(-lightDir));
+
+			//	// compute the specular component
+			//	// what would be the ideal reflection direction for this light ray
+			//	Vec3f R = reflect(lightDir, hitNormal);
+			//	specularLight += vis * intrInfo.hitObject->specular * lightIntensity * std::pow(std::max(0.f, R.dotProduct(-ray.dir)), intrInfo.hitObject->nSpecular); // * intrInfo.hitObject->kReflect)
+			//		// + (intrInfo.hitObject->color * (1 - intrInfo.hitObject->kReflect));
+			//}
+			//hitColor = objectColor * intrInfo.hitObject->ambient + diffuseLight + specularLight;
+			//hitColor = hitColor * intrInfo.hitObject->getPattern(hitTexCoordinates);
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
 			// get info from reflected ray
@@ -521,29 +569,51 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 			Vec3f reflectionColor = castRay(Ray{ reflectionRayOrig, reflectionDirection }, scene, depth + 1);
 			hitColor += reflectionColor * kr;
 		}
-		else if (intrInfo.hitObject->materialType == MaterialType::Phong) {
-			Vec3f diffuseLight = 0, specularLight = 0;
-			for (uint32_t i = 0; i < scene.lights.size(); ++i) {
-				Vec3f lightDir, lightIntensity;
-				IntersectInfo isectShad;
-				scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, isectShad.tNear);
-
-				bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, isectShad);
-				// if (isectShad.tNear > lights[i])
-
-				// compute the diffuse component
-				diffuseLight += vis * intrInfo.hitObject->difuse * lightIntensity * std::max(0.f, hitNormal.dotProduct(-lightDir));
-
-				// compute the specular component
-				// what would be the ideal reflection direction for this light ray
-				Vec3f R = reflect(lightDir, hitNormal);
-				specularLight += vis * intrInfo.hitObject->specular * lightIntensity * std::pow(std::max(0.f, R.dotProduct(-ray.dir)), intrInfo.hitObject->nSpecular); // * intrInfo.hitObject->kReflect)
-					// + (intrInfo.hitObject->color * (1 - intrInfo.hitObject->kReflect));
-			}
-			hitColor = objectColor * intrInfo.hitObject->ambient + diffuseLight + specularLight;
-			hitColor = hitColor * intrInfo.hitObject->getPattern(hitTexCoordinates);
-		}
+		
 		return hitColor;
 	}
 	return scene.options.backgroundColor;
+}
+
+Vec3f AreaLight::getTotalIlluminance(const Vec3f& hitPoint, const Vec3f& hitNormal, const ObjectVector& objects)
+{
+	setPoints();
+	float sumIntensity = 0;
+	Vec3f lightIntensity = color * std::min(1.0f, (float)(intensity / (4 * M_PI * (hitPoint - pos).length2() / 1000)));
+
+	if (options::useAreaLightAcceleration) {
+		// try visibility of base points
+		if (basePoints.size() < points.size()) {
+			int visiblePoints = 0;
+			int testedPoints = 0;
+			for (const auto& p : basePoints) {
+				IntersectInfo intrShadInfo;
+				Vec3f dir = hitPoint - p;
+				intrShadInfo.tNear = dir.length();
+				visiblePoints += !Render::trace(Ray{ hitPoint, -dir.normalize(), RayType::ShadowRay }, objects, intrShadInfo);
+				sumIntensity += std::max(0.f, hitNormal.dotProduct(-dir));
+				testedPoints++;
+
+				if (visiblePoints != 0 && visiblePoints != testedPoints)
+					break;
+			}
+
+			// if no or all points visible, we may not compute all rest points
+			if (visiblePoints == 0)
+				return 0;
+			// More agressive optimization, but may produce artifacts
+			if (visiblePoints == basePoints.size())
+				return lightIntensity * (sumIntensity / basePoints.size());
+		}
+	}
+
+	// for maximum quality, test all samples
+	for (const auto& p : points) {
+		IntersectInfo intrShadInfo;
+		Vec3f dir = hitPoint - p;
+		intrShadInfo.tNear = dir.length();
+		bool vis = !Render::trace(Ray{ hitPoint, -dir.normalize(), RayType::ShadowRay }, objects, intrShadInfo);
+		sumIntensity += vis * std::max(0.f, hitNormal.dotProduct(-dir));
+	}
+	return lightIntensity * (sumIntensity / points.size());
 }

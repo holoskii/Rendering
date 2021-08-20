@@ -37,7 +37,7 @@ public:
 	MaterialType materialType;
 	ObjectType objectType = ObjectType::Object;
 	PatternType pattern = PatternType::None;
-	float indexOfRefraction = 1.4f; // used for Reflective only
+	float indexOfRefraction = 1.4f; // used for Transparent only
 	float ambient = 0.1f;			// used for Phong only
 	float difuse = 0.1f;			// used for Phong only
 	float specular = 1.0f;			// used for Phong only

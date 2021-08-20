@@ -36,3 +36,38 @@ void PointLight::illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightInt
 	lightDir.normalize();
 	distance = (point - pos).length();
 }
+
+AreaLight::AreaLight()
+{
+	type = LightType::AreaLight;
+}
+
+void AreaLight::setPoints()
+{
+	if (pointsCreated)
+		return;
+	Vec3f anglePos = pos - (i / 2.0f) - (j / 2.0f);
+	pointsCreated = true;
+	if (samples > 1) {
+		for (int ii = 0; ii < samples; ii++) {
+			for (int jj = 0; jj < samples; jj++) {
+				points.push_back(anglePos + (i * (((float)ii) / (samples - 1))) + (j * (((float)jj) / (samples - 1))));
+			}
+		}
+
+		for (int ii = 0; ii < base_samples; ii++) {
+			for (int jj = 0; jj < base_samples; jj++) {
+				basePoints.push_back(anglePos + (i * (((float)ii) / (base_samples - 1))) + (j * (((float)jj) / (base_samples - 1))));
+			}
+		}
+	}
+	else {
+		points.push_back(pos);
+		basePoints.push_back(pos);
+	}
+}
+
+void AreaLight::illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const
+{
+	std::cout << "Area light illuminate, error\n";
+}

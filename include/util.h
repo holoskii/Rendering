@@ -76,7 +76,7 @@ inline bool strEquals(const std::string_view& str1, const std::string_view& str2
 	return str1.compare(str2) == 0;
 };
 
-int savePPM(Vec3f* frameBuffer, const Options& options);
+int saveImage(Vec3f* frameBuffer, const Options& options);
 
 #define LOG_ERROR logError(__FILE__, __FUNCSIG__, __LINE__);
 

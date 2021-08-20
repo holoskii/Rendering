@@ -42,6 +42,8 @@ public:
 
 	Camera(const Vec3f& a_pos = { 0, 0, 0 }, const Vec3f& a_rot = { 0, 0, 0 });
 	Ray getRay(const float xPix, const  float yPix);
+
+	bool cameraRotated = false;
 };
 
 class Scene
