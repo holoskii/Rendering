@@ -40,6 +40,9 @@ public:
 	Vec3f rot;
 	Matrix44f rMatrix;
 
+	float fov = 90.0f;
+	float zNear = 0.1f, zFar = 100.0f;
+
 	Camera(const Vec3f& a_pos = { 0, 0, 0 }, const Vec3f& a_rot = { 0, 0, 0 });
 	Ray getRay(const float xPix, const  float yPix);
 
@@ -51,13 +54,13 @@ class Scene
 public:
 	bool sceneLoadSuccess = true;
 
-	int skyboxWidth, skyboxHeight;
-	Vec3f* skyboxes[6] = { nullptr };
-
 	ObjectVector objects;
 	LightsVector lights;
 	Options options;
 	Camera camera;
+
+	int skyboxWidth, skyboxHeight;
+	Vec3f* skyboxes[6] = { nullptr };
 
 	std::atomic<int> finishedPixels{ 0 };
 	std::atomic<int> finishedWorkers{ 0 };

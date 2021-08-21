@@ -43,12 +43,18 @@ public:
 	Vec3f pos;
 };
 
+/* The area light is determined by its position, and 2 base vectors, 
+ * forming a parallelogram with a known center. Its light properties 
+ * are determined by illuminance (from Light base class) and number of samples
+ * per one side of the light source (total number is square of that) */
 class AreaLight : public Light
 {
 public:
 	AreaLight();
 	void setPoints();
 	void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const;
+
+	// defined in scene.cpp to avoid circular dependency
 	Vec3f getTotalIlluminance(const Vec3f& hitPoint, const Vec3f& hitNormal, const ObjectVector& objects);
 
 	Vec3f pos;

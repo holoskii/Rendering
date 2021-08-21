@@ -5,6 +5,8 @@
 
 #include "timer.h"
 #include "util.h"
+#include "options.h"
+#include "stats.h"
 
 Object::Object(const Vec3f& a_center, const Vec3f& a_color, const MaterialType& a_materialType)
 	: color(a_color), pos(a_center), materialType(a_materialType) {}
@@ -49,9 +51,9 @@ Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, const V
 bool Triangle::rayTriangleIntersect(const Ray& ray, const Triangle* triPtr,
 	float& t, Vec2f& uv)
 {
-#ifdef _STATS
-	stats::rayTriTests.store(stats::rayTriTests.load() + 1);
-#endif // _STATS
+	if (options::collectStatistics) {
+		stats::rayTriTests.store(stats::rayTriTests.load() + 1);
+	}
 	const Vec3f& v0 = triPtr->a;
 	const Vec3f& v1 = triPtr->b;
 	const Vec3f& v2 = triPtr->c;
@@ -63,9 +65,9 @@ bool Triangle::rayTriangleIntersect(const Ray& ray, const Triangle* triPtr,
 	Vec3f pvec = ray.dir.crossProduct(v0v2);
 	float det = v0v1.dotProduct(pvec);
 
-#ifdef _BACKFACE_CULLING
-	if (det < 1e-8) return false;
-#endif // _BACKFACE_CULLING
+	if (options::useBackfaceCulling) {
+		if (det < 1e-8) return false;
+	}
 
 	if (fabs(det) < 1e-8) return false;
 
@@ -116,11 +118,8 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, c
 	// vertex normal shading
 	hitNormal = ((triPtr->n_b * uv.x + triPtr->n_c * uv.y + triPtr->n_a * (1 - uv.x - uv.y)) / 3).normalize();
 #else
-	// triangle normal shading
-	const Vec3f& v0 = triPtr->a;
-	const Vec3f& v1 = triPtr->b;
-	const Vec3f& v2 = triPtr->c;
-	hitNormal = (v1 - v0).crossProduct(v2 - v0).normalize();
+	// face normal shading
+	hitNormal = (triPtr->b - triPtr->a).crossProduct(triPtr->c - triPtr->a).normalize();
 #endif
 	tex = Vec2f{ uv.x, uv.y };
 }
@@ -177,9 +176,9 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 	Vec3f min = { std::numeric_limits<float>::max() };
 	Vec3f max = { std::numeric_limits<float>::min() };
 
-#ifndef _NO_OUTPUT
-	std::cout << "Mesh: " << filename << '\n';
-#endif // _NO_OUTPUT
+	if (options::enableOutput) {
+		std::cout << "Mesh: " << filename << '\n';
+	}
 
 	do {
 		// read line and drop commented part
@@ -308,32 +307,33 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 	for (const Triangle* tri : tris)
 		allTris.push_back(tri);
 	ac->setup(tris, 1, options);
-#ifdef _STATS
-	stats::meshCount.store(stats::meshCount.load() + allTris.size());
-#endif // _STATS
+	if (options::collectStatistics) {
+		stats::meshCount.store(stats::meshCount.load() + allTris.size());
+	}
 	return true;
 }
 
 
 AccelerationStructure::AccelerationStructure()
 {
-#ifdef _STATS
-	stats::acCount.store(stats::acCount.load() + 1);
-#endif // _STATS
+	if (options::collectStatistics) {
+		stats::acCount.store(stats::acCount.load() + 1);
+	}
 }
 
 AccelerationStructure::~AccelerationStructure() {}
 
 void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_depth, const Options& options)
 {
-#ifdef _NO_ACCEL_STRUCT
-	tris = a_tris;
-#endif // _NO_ACCEL_STRUCT
+	if (!options::useAC) {
+		tris = a_tris;
+	}
 
-	if (a_tris.size() < options.minBatchSizeAccelStruct || a_depth >= options.maxDepthAccelStruct) {
-#ifdef _STATS
-		stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
-#endif // _STATS
+
+	if (a_tris.size() <= a_depth * options.acPenalty) {
+		if (options::collectStatistics) {
+			stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
+		}
 		tris = a_tris;
 		return;
 	}
@@ -349,9 +349,9 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 	float splitDist = getOptimalSplit(a_tris, orientation, bounds, trisLeft, trisRight);
 
 	if ((trisLeft.size() == 0 || trisRight.size() == 0) || (trisLeft.size() + trisRight.size() >= a_tris.size() * 1.5)) {
-#ifdef _STATS
-		stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
-#endif // _STATS
+		if (options::collectStatistics) {
+			stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
+		}
 		tris = a_tris;
 		return;
 	}
@@ -374,7 +374,6 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 
 	right->setup(trisRight, a_depth + 1, options);
 	left->setup(trisLeft, a_depth + 1, options);
-
 }
 
 void AccelerationStructure::setBounds(const Vec3f& a, const Vec3f& b)
@@ -385,12 +384,12 @@ void AccelerationStructure::setBounds(const Vec3f& a, const Vec3f& b)
 
 bool AccelerationStructure::intersectBox(const Ray& ray) const
 {
-#ifdef _NO_ACCEL_STRUCT
-	return true;
-#endif // _NO_ACCEL_STRUCT
-#ifdef _STATS
-	stats::accelStructTests.store(stats::accelStructTests.load() + 1);
-#endif // _STATS
+	if (!options::useAC) {
+		return true;
+	}
+	if (options::collectStatistics) {
+		stats::accelStructTests.store(stats::accelStructTests.load() + 1);
+	}
 	const Vec3f invdir = 1 / ray.dir;
 	const int sign[3] = { (invdir.x < 0), (invdir.y < 0), (invdir.z < 0) };
 

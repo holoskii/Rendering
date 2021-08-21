@@ -7,6 +7,8 @@
 
 #include "timer.h"
 #include "util.h"
+#include "options.h"
+#include "stats.h"
 
 Camera::Camera(const Vec3f& a_pos, const Vec3f& a_rot)
 	: pos(a_pos), rot(a_rot) {}
@@ -46,6 +48,7 @@ Ray Camera::getRay(const float xPix, const  float yPix)
 	return Ray{ this->pos , dir };
 }
 
+
 Scene::Scene(const std::string& sceneName)
 {
 	loadSkybox();
@@ -54,9 +57,9 @@ Scene::Scene(const std::string& sceneName)
 
 bool Scene::loadScene(const std::string& sceneName)
 {
-#ifndef _NO_OUTPUT
-    std::cout << "Loading scene " << sceneName << '\n';
-#endif // _NO_OUTPUT
+	if (options::enableOutput) {
+		std::cout << "Loading scene " << sceneName << '\n';
+	}
 
     enum class BlockType { None, Options, Light, Object };
     std::map<std::string, BlockType> blockMap;
@@ -132,10 +135,8 @@ bool Scene::loadScene(const std::string& sceneName)
                 options.nWorkers = strToInt(value);
             else if (strEquals(key, "max_ray_depth"))
                 options.maxRayDepth = strToInt(value);
-            else if (strEquals(key, "ac_max_depth"))
-                options.maxDepthAccelStruct = strToInt(value);
-            else if (strEquals(key, "ac_min_batch"))
-                options.minBatchSizeAccelStruct = strToInt(value);
+            else if (strEquals(key, "ac_penalty"))
+                options.acPenalty = strToInt(value);
             else if (strEquals(key, "background_color"))
                 options.backgroundColor = str3ToFloat(splitString(value, ','));
             else if (strEquals(key, "position"))
@@ -263,40 +264,40 @@ bool Scene::loadScene(const std::string& sceneName)
         }
     }
 
-    options::combineWithGlobal(options);
-
     ifs.close();
     return true;
 }
 
 void Scene::loadSkybox()
 {
-	const char names[][48] =
-	{
-		"D:\\dev\\CG\\RayTracing\\scenes\\box_left.bmp",
-		"D:\\dev\\CG\\RayTracing\\scenes\\box_front.bmp",
-		"D:\\dev\\CG\\RayTracing\\scenes\\box_right.bmp",
-		"D:\\dev\\CG\\RayTracing\\scenes\\box_back.bmp",
-		"D:\\dev\\CG\\RayTracing\\scenes\\box_top.bmp",
-		"D:\\dev\\CG\\RayTracing\\scenes\\box_bottom.bmp"
-	};
+	if (options::useSkybox) {
+		const char names[][48] =
+		{
+			"D:\\dev\\CG\\RayTracing\\scenes\\box_left.bmp",
+			"D:\\dev\\CG\\RayTracing\\scenes\\box_front.bmp",
+			"D:\\dev\\CG\\RayTracing\\scenes\\box_right.bmp",
+			"D:\\dev\\CG\\RayTracing\\scenes\\box_back.bmp",
+			"D:\\dev\\CG\\RayTracing\\scenes\\box_top.bmp",
+			"D:\\dev\\CG\\RayTracing\\scenes\\box_bottom.bmp"
+		};
 
-	unsigned char* u_skyboxes[6];
-	int width, height;
-	for (int i = 0; i < 6; i++) {
-		u_skyboxes[i] = loadBMP(names[i], width, height);
-	}
-	skyboxHeight = height;
-	skyboxWidth = width;
+		unsigned char* u_skyboxes[6];
+		int width, height;
+		for (int i = 0; i < 6; i++) {
+			u_skyboxes[i] = loadBMP(names[i], width, height);
+		}
+		skyboxHeight = height;
+		skyboxWidth = width;
 
-	for (int k = 0; k < 6; k++) {
-		skyboxes[k] = new Vec3f[width * height];
-		for (int i = 0; i < height; i++) {
-			for (int j = 0; j < width; j++) {
-				int v = 3 * (i * width + j);
-				float x = u_skyboxes[k][v], y = u_skyboxes[k][v + 1], z = u_skyboxes[k][v + 2];
-				x /= 256; y /= 256; z /= 256;
-				skyboxes[k][i * width + j] = Vec3f{ x, y, z };
+		for (int k = 0; k < 6; k++) {
+			skyboxes[k] = new Vec3f[width * height];
+			for (int i = 0; i < height; i++) {
+				for (int j = 0; j < width; j++) {
+					int v = 3 * (i * width + j);
+					float x = u_skyboxes[k][v], y = u_skyboxes[k][v + 1], z = u_skyboxes[k][v + 2];
+					x /= 256; y /= 256; z /= 256;
+					skyboxes[k][i * width + j] = Vec3f{ x, y, z };
+				}
 			}
 		}
 	}
@@ -304,6 +305,9 @@ void Scene::loadSkybox()
 
 Vec3f Scene::getSkybox(const Vec3f& dir) const
 {
+	if (!options::useSkybox) {
+		return options.backgroundColor;
+	}
 
 	auto toPixel = [](const float& v, const int& max)
 	{
@@ -363,10 +367,10 @@ Vec3f Scene::getSkybox(const Vec3f& dir) const
 void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 {
 #ifdef _DEBUG
-#ifdef _PROGRESS_OUTPUT
-	auto lastStat = std::chrono::high_resolution_clock::now();
-#endif // _PROGRESS_OUTPUT
-#endif // _DEBUG && _PROGRESS_OUTPUT
+	if (options::outputProgress) {
+		auto lastStat = std::chrono::high_resolution_clock::now();
+	}
+#endif // _DEBUG
 
 	const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
 	const float imageAspectRatio = (options.width) / (float)options.height;
@@ -383,14 +387,15 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 			finishedPixels.store(finishedPixels.load() + 1);
 		}
 #ifdef _DEBUG
-#ifdef _PROGRESS_OUTPUT
-		if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - lastStat).count() >= 1000ll) {
-			const float progressCoef = 100.0f / (options.width * options.height);
-			if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
-			lastStat = std::chrono::high_resolution_clock::now();
+		// in debug mode we only have one thread, so we need to check for progress updates manually
+		if (options::outputProgress) {
+			if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - lastStat).count() >= 1000ll) {
+				const float progressCoef = 100.0f / (options.width * options.height);
+				if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
+				lastStat = std::chrono::high_resolution_clock::now();
+			}
 		}
-#endif // _PROGRESS_OUTPUT
-#endif // _DEBUG && _PROGRESS_OUTPUT
+#endif // _DEBUG
 	}
 	finishedWorkers.store(finishedWorkers.load() + 1);
 }
@@ -399,12 +404,10 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 {
 	Timer t("Render scene");
 
-#ifdef _SINGLE_THREAD
+#ifdef _DEBUG
+	// in debug mode we do not create any additional threads
 	renderWorker(frameBuffer, 0, options.height);
-	return 0;
-#endif
-
-#ifndef _DEBUG
+#else
 	std::vector<std::unique_ptr<std::thread>> threadPool;
 	for (size_t i = 0; i < options.nWorkers; i++) {
 		size_t y0 = options.height / options.nWorkers * i;
@@ -413,26 +416,27 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 		threadPool.push_back(std::make_unique<std::thread>(&Scene::renderWorker, this, frameBuffer, y0, y1));
 	}
 
-#ifdef _PROGRESS_OUTPUT
-	while (finishedWorkers.load() != options.nWorkers) {
-		auto start = std::chrono::high_resolution_clock::now();
-		for (int i = 0; i < 100; i++) {
-			if (finishedWorkers.load() == options.nWorkers)
-				break;
-			if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() >= 1000ll)
-				break;
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-		}
-		if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() >= 1000ll) {
-			const float progressCoef = 100.0f / (options.width * options.height);
-			std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
+	if (options::outputProgress) {
+		// until all workers finish we will print progress
+		while (finishedWorkers.load() != options.nWorkers) {
+			auto start = std::chrono::high_resolution_clock::now();
+			for (int i = 0; i < 100; i++) {
+				if (finishedWorkers.load() == options.nWorkers)
+					break;
+				if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() >= 1000ll)
+					break;
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			}
+			if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() >= 1000ll) {
+				const float progressCoef = 100.0f / (options.width * options.height);
+				std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
+			}
 		}
 	}
-#endif // _PROGRESS_OUTPUT
+
 	for (auto& thread : threadPool)
 		thread->join();
-#else
-	renderWorker(frameBuffer, 0, options.height);
+
 #endif
 	return 0;
 }
@@ -443,58 +447,57 @@ long long Scene::render()
 	Timer t("Total time");
 	Vec3f* frameBuffer = new Vec3f[options.height * options.width];
 
-	/*for (int i = 0; i < skyboxHeight; i++)
-		for (int j = 0; j < skyboxWidth; j++)
-			frameBuffer[i * options.width + j] = skyboxes[5][i * skyboxWidth + j];
-	saveImage(frameBuffer, options);
-	return t.stop();*/
+	if (options::showAC) {
+		const Vec3f orig = { 0, 0, 0 };
+		const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
+		float imageAspectRatio = (options.width) / (float)options.height;
 
-	launchWorkers(frameBuffer);
+		int acMax = 0;
+		int* acBuffer = new int[options.width * options.height];
 
-#ifdef _SHOW_AC
-	const Vec3f orig = { 0, 0, 0 };
-	const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
-	float imageAspectRatio = (options.width) / (float)options.height;
-
-	int acMax = 0;
-	int* acBuffer = new int[options.width * options.height];
-
-	for (size_t y = 0; y < options.height; y++) {
-		for (size_t x = 0; x < options.width; x++) {
-			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
-			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
-			Ray ray = this->camera.getRay(xPix, yPix);
-			int val = AccelerationStructure::countAC(ray, *this);
-			if (val > acMax) acMax = val;
-			acBuffer[x + y * options.width] = val;
+		for (size_t y = 0; y < options.height; y++) {
+			for (size_t x = 0; x < options.width; x++) {
+				float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
+				float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
+				Ray ray = this->camera.getRay(xPix, yPix);
+				int val = countAC(ray);
+				if (val > acMax) acMax = val;
+				acBuffer[x + y * options.width] = val;
+			}
 		}
+
+		for (size_t y = 0; y < options.height; y++) {
+			for (size_t x = 0; x < options.width; x++) {
+				float val = acBuffer[x + y * options.width];
+				val /= acMax;
+				frameBuffer[x + y * options.width] = Vec3f{ val };
+			}
+		}
+		delete[] acBuffer;
+	}
+	else {
+		launchWorkers(frameBuffer);
 	}
 
-	for (size_t y = 0; y < options.height; y++) {
-		for (size_t x = 0; x < options.width; x++) {
-			float val = acBuffer[x + y * options.width];
-			val /= acMax;
-			frameBuffer[x + y * options.width] = Vec3f{ val };
-		}
+	if (options::imageOutput) {
+		saveImage(frameBuffer, options);
 	}
-	delete[] acBuffer;
-#endif // _SHOW_AC
 
-#ifndef _NO_IMAGE_OUTPUT
-	saveImage(frameBuffer, options);
-#endif // _NO_OUTPUT
 	delete[] frameBuffer;
-	for (int k = 0; k < 6; k++)
-		if (skyboxes[k])
-			delete[] skyboxes[k];
 
-#ifdef _STATS
-	stats::printStats();
-#endif // _STATS
+	if (options::useSkybox) {
+		for (int k = 0; k < 6; k++)
+			if (skyboxes[k])
+				delete[] skyboxes[k];
+	}
 
-#ifndef _NO_OUTPUT
-	std::cout << '\n';
-#endif // _NO_OUTPUT
+	if (options::collectStatistics) {
+		stats::printStats();
+	}
+
+	if (options::enableOutput) {
+		std::cout << '\n';
+	}
 	return t.stop();
 }
 
@@ -683,7 +686,7 @@ Vec3f AreaLight::getTotalIlluminance(const Vec3f& hitPoint, const Vec3f& hitNorm
 	float sumIntensity = 0;
 	Vec3f lightIntensity = color * std::min(1.0f, (float)(intensity / (4 * M_PI * (hitPoint - pos).length2() / 1000)));
 
-	if (options::useAreaLightAcceleration) {
+	if (options::useAreaLightAcceleration && base_samples > 0) {
 		// try visibility of base points
 		if (basePoints.size() < points.size()) {
 			int visiblePoints = 0;

@@ -89,6 +89,7 @@ public:
 	bool intersectAccelStruct(const Ray& ray, float& t0, const Triangle*& triPtr, Vec2f& uv) const;
 	int recCountAC(const Ray& ray);
 
+	// SAH - Surface Area Heuristic
 	static float calculateSAH(const int orientation, const std::vector<const Triangle*>& tris,
 		const Vec3f bounds[2], const float boundary);
 	static float binarySearchSAH(const int orientation, const std::vector<const Triangle*>& tris,

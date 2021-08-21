@@ -19,32 +19,21 @@ public:
 	std::string imageName = "out";
 	Vec3f backgroundColor{ 0.0f, 0.0f, 0.0f };
 
-	int minBatchSizeAccelStruct = 10;
-	int maxDepthAccelStruct = 5;
+	int acPenalty = 1;
 };
 
 
 namespace options
 {
-	inline bool useAreaLightAcceleration = 1;
-
-	inline Options globalOptions;
-	inline bool useGlobal_width = false;
-	inline bool useGlobal_height = false;
-	inline bool useGlobal_fov = false;
-	inline bool useGlobal_n_workers = false;
-	inline bool useGlobal_max_ray_depth = false;
-	inline bool useGlobal_ac_max_depth = false;
-	inline bool useGlobal_ac_min_batch = false;
-
-	inline void combineWithGlobal(Options& options)
-	{
-		if (useGlobal_width) options.width = globalOptions.width;
-		if (useGlobal_height) options.height = globalOptions.height;
-		if (useGlobal_fov) options.fov = globalOptions.fov;
-		if (useGlobal_n_workers) options.nWorkers = globalOptions.nWorkers;
-		if (useGlobal_max_ray_depth) options.maxRayDepth = globalOptions.maxRayDepth;
-		if (useGlobal_ac_max_depth) options.maxDepthAccelStruct = globalOptions.maxDepthAccelStruct;
-		if (useGlobal_ac_min_batch) options.minBatchSizeAccelStruct = globalOptions.minBatchSizeAccelStruct;
-	}
+	// global settings are stored here
+	// keeping them constexpr is better for performance
+	constexpr bool outputProgress			= 1;
+	constexpr bool useAreaLightAcceleration	= 1;
+	constexpr bool useBackfaceCulling		= 1;
+	constexpr bool collectStatistics		= 1;
+	constexpr bool enableOutput				= 1;
+	constexpr bool imageOutput				= 1;
+	constexpr bool useAC					= 1;
+	constexpr bool showAC					= 0;
+	constexpr bool useSkybox				= 1;
 }

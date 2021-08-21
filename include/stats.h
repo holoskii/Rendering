@@ -1,10 +1,10 @@
+// used to calculate scene statistics, can help optimization
 #pragma once
 
 #include <iostream>
 #include <iomanip>
 #include <atomic>
 
-#ifdef _STATS
 namespace stats
 {
 	inline std::atomic<int> rayTriTests{ 0 };
@@ -41,4 +41,3 @@ namespace stats
 		acCount.store(0);
 	}
 }
-#endif
