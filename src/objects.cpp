@@ -220,21 +220,23 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 				// normalize all vertices
 				normalized = true;
 				Vec3f range = max - min;
-				Vec3f stretch = size / range;
-				float maxStretch = std::max(stretch.x, std::max(stretch.y, stretch.z));
-
 				Vec3f normSize = size;
-				if (maxStretch == stretch.x) {
-					normSize.y = normSize.x / (range.x / range.y);
-					normSize.z = normSize.x / (range.x / range.z);
-				}
-				else if (maxStretch == stretch.y) {
-					normSize.x = normSize.y / (range.y / range.x);
-					normSize.z = normSize.y / (range.y / range.z);
-				}
-				else {
-					normSize.x = normSize.z / (range.z / range.x);
-					normSize.y = normSize.z / (range.z / range.y);
+				if (!(range.x < options.bias || range.y < options.bias || range.z < options.bias)) {
+
+					Vec3f stretch = size / range;
+					float maxStretch = std::max(stretch.x, std::max(stretch.y, stretch.z));
+					if (maxStretch == stretch.x) {
+						normSize.y = normSize.x / (range.x / range.y);
+						normSize.z = normSize.x / (range.x / range.z);
+					}
+					else if (maxStretch == stretch.y) {
+						normSize.x = normSize.y / (range.y / range.x);
+						normSize.z = normSize.y / (range.y / range.z);
+					}
+					else {
+						normSize.x = normSize.z / (range.z / range.x);
+						normSize.y = normSize.z / (range.z / range.y);
+					}
 				}
 
 				for (auto& v : vertexData) {
@@ -247,6 +249,10 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 					v.x += pos.x;
 					v.y += pos.y;
 					v.z += pos.z;
+
+					if (range.x < options.bias) v.x = pos.x;
+					if (range.y < options.bias) v.y = pos.y;
+					if (range.z < options.bias) v.z = pos.z;
 				}
 
 				for (auto& n : normalData) {

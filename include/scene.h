@@ -51,6 +51,9 @@ class Scene
 public:
 	bool sceneLoadSuccess = true;
 
+	int skyboxWidth, skyboxHeight;
+	Vec3f* skyboxes[6] = { nullptr };
+
 	ObjectVector objects;
 	LightsVector lights;
 	Options options;
@@ -61,6 +64,8 @@ public:
 
 	Scene(const std::string& sceneName);
 	bool loadScene(const std::string& sceneName);
+	void loadSkybox();
+	Vec3f getSkybox(const Vec3f& dir) const;
 
 	long long render();
 	int launchWorkers(Vec3f* frameBuffer);

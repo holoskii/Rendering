@@ -46,43 +46,9 @@ Ray Camera::getRay(const float xPix, const  float yPix)
 	return Ray{ this->pos , dir };
 }
 
-void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
-{
-#ifdef _DEBUG
-#ifdef _PROGRESS_OUTPUT
-	auto lastStat = std::chrono::high_resolution_clock::now();
-#endif // _PROGRESS_OUTPUT
-#endif // _DEBUG && _PROGRESS_OUTPUT
-
-	const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
-	const float imageAspectRatio = (options.width) / (float)options.height;
-	for (size_t y = y0; y < y1; y++) {
-		for (size_t x = 0; x < options.width; x++) {
-			if (x == 470 && y == 380) {
-				//frameBuffer[x + y * options.width] = { 1,0,0 };
-				//continue;
-			}
-			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
-			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
-			Ray ray = this->camera.getRay(xPix, yPix);
-			frameBuffer[x + y * options.width] = Render::castRay(ray, *this, 0);
-			finishedPixels.store(finishedPixels.load() + 1);
-		}
-#ifdef _DEBUG
-#ifdef _PROGRESS_OUTPUT
-		if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - lastStat).count() >= 1000ll) {
-			const float progressCoef = 100.0f / (options.width * options.height);
-			if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
-			lastStat = std::chrono::high_resolution_clock::now();
-		}
-#endif // _PROGRESS_OUTPUT
-#endif // _DEBUG && _PROGRESS_OUTPUT
-	}
-	finishedWorkers.store(finishedWorkers.load() + 1);
-}
-
 Scene::Scene(const std::string& sceneName)
 {
+	loadSkybox();
 	sceneLoadSuccess = this->loadScene(sceneName);
 }
 
@@ -256,7 +222,7 @@ bool Scene::loadScene(const std::string& sceneName)
                 auto res = splitString(value, ',');
                 if (strEquals(res[0], "transparent")) {
                     object->materialType = MaterialType::Transparent;
-					object->indexOfRefraction = strToFloat(res[2]);
+					object->indexOfRefraction = strToFloat(res[1]);
                 }
                 else if (strEquals(res[0], "reflective")) {
                     object->materialType = MaterialType::Reflective;
@@ -301,6 +267,132 @@ bool Scene::loadScene(const std::string& sceneName)
 
     ifs.close();
     return true;
+}
+
+void Scene::loadSkybox()
+{
+	const char names[][48] =
+	{
+		"D:\\dev\\CG\\RayTracing\\scenes\\box_left.bmp",
+		"D:\\dev\\CG\\RayTracing\\scenes\\box_front.bmp",
+		"D:\\dev\\CG\\RayTracing\\scenes\\box_right.bmp",
+		"D:\\dev\\CG\\RayTracing\\scenes\\box_back.bmp",
+		"D:\\dev\\CG\\RayTracing\\scenes\\box_top.bmp",
+		"D:\\dev\\CG\\RayTracing\\scenes\\box_bottom.bmp"
+	};
+
+	unsigned char* u_skyboxes[6];
+	int width, height;
+	for (int i = 0; i < 6; i++) {
+		u_skyboxes[i] = loadBMP(names[i], width, height);
+	}
+	skyboxHeight = height;
+	skyboxWidth = width;
+
+	for (int k = 0; k < 6; k++) {
+		skyboxes[k] = new Vec3f[width * height];
+		for (int i = 0; i < height; i++) {
+			for (int j = 0; j < width; j++) {
+				int v = 3 * (i * width + j);
+				float x = u_skyboxes[k][v], y = u_skyboxes[k][v + 1], z = u_skyboxes[k][v + 2];
+				x /= 256; y /= 256; z /= 256;
+				skyboxes[k][i * width + j] = Vec3f{ x, y, z };
+			}
+		}
+	}
+}
+
+Vec3f Scene::getSkybox(const Vec3f& dir) const
+{
+
+	auto toPixel = [](const float& v, const int& max)
+	{
+		int val = (v + 1.0f) / 2.0f * max;
+		if (val >= max) val = max - 1;
+		return val;
+	};
+
+	Vec3f adir = dir;
+	float max = std::max(fabs(adir.x), std::max(fabs(adir.y), fabs(adir.z)));
+	if (max == fabs(adir.z)) {
+		if (adir.z < 0) {
+			adir = dir * (1 / -dir.z);
+			int i = (adir.y + 1.0f) / 2.0f * skyboxHeight;
+			int j = (adir.x + 1.0f) / 2.0f * skyboxWidth;
+			return skyboxes[1][i * skyboxWidth + j];
+		}
+		else {
+			adir = dir * (1 / dir.z);
+			int i = (adir.y + 1.0f) / 2.0f * skyboxHeight;
+			int j = (-adir.x + 1.0f) / 2.0f * skyboxWidth;
+			return skyboxes[3][i * skyboxWidth + j];
+		}
+	}
+	else if (max == fabs(adir.x)) {
+		if (adir.x < 0) {
+			adir = dir * (1 / -dir.x);
+			int i = toPixel(adir.y, skyboxHeight);
+			int j = toPixel(-adir.z, skyboxWidth);
+			return skyboxes[0][i * skyboxWidth + j];
+		}
+		else {
+			adir = dir * (1 / dir.x);
+			int i = toPixel(adir.y, skyboxHeight);
+			int j = toPixel(adir.z, skyboxWidth);
+			return skyboxes[2][i * skyboxWidth + j];
+		}
+	}
+	else {
+		if (adir.y < 0) {
+			adir = dir * (1 / -dir.y);
+			int i = toPixel(adir.z, skyboxHeight);
+			int j = toPixel(adir.x, skyboxWidth);
+			return skyboxes[5][i * skyboxWidth + j];
+		}
+		else {
+			adir = dir * (1 / dir.y);
+			int i = toPixel(adir.z, skyboxHeight);
+			int j = toPixel(adir.x, skyboxWidth);
+			return skyboxes[4][i * skyboxWidth + j];
+		}
+	}
+
+	return options.backgroundColor;
+}
+
+void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
+{
+#ifdef _DEBUG
+#ifdef _PROGRESS_OUTPUT
+	auto lastStat = std::chrono::high_resolution_clock::now();
+#endif // _PROGRESS_OUTPUT
+#endif // _DEBUG && _PROGRESS_OUTPUT
+
+	const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
+	const float imageAspectRatio = (options.width) / (float)options.height;
+	for (size_t y = y0; y < y1; y++) {
+		for (size_t x = 0; x < options.width; x++) {
+			//if (x == 1921 && y == 1971) {
+			//	frameBuffer[x + y * options.width] = { 1,0,0 };
+			//	//continue;
+			//}
+			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
+			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
+			Ray ray = this->camera.getRay(xPix, yPix);
+			frameBuffer[x + y * options.width] = Render::castRay(ray, *this, 0);
+			finishedPixels.store(finishedPixels.load() + 1);
+		}
+#ifdef _DEBUG
+#ifdef _PROGRESS_OUTPUT
+		if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - lastStat).count() >= 1000ll) {
+			const float progressCoef = 100.0f / (options.width * options.height);
+			if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
+			lastStat = std::chrono::high_resolution_clock::now();
+		}
+#endif // _PROGRESS_OUTPUT
+#endif // _DEBUG && _PROGRESS_OUTPUT
+	}
+	finishedWorkers.store(finishedWorkers.load() + 1);
 }
 
 int Scene::launchWorkers(Vec3f* frameBuffer)
@@ -351,6 +443,12 @@ long long Scene::render()
 	Timer t("Total time");
 	Vec3f* frameBuffer = new Vec3f[options.height * options.width];
 
+	/*for (int i = 0; i < skyboxHeight; i++)
+		for (int j = 0; j < skyboxWidth; j++)
+			frameBuffer[i * options.width + j] = skyboxes[5][i * skyboxWidth + j];
+	saveImage(frameBuffer, options);
+	return t.stop();*/
+
 	launchWorkers(frameBuffer);
 
 #ifdef _SHOW_AC
@@ -386,6 +484,9 @@ long long Scene::render()
 	saveImage(frameBuffer, options);
 #endif // _NO_OUTPUT
 	delete[] frameBuffer;
+	for (int k = 0; k < 6; k++)
+		if (skyboxes[k])
+			delete[] skyboxes[k];
 
 #ifdef _STATS
 	stats::printStats();
@@ -494,7 +595,7 @@ bool Render::trace(const Ray& ray, const ObjectVector& objects, IntersectInfo& i
 
 Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 {
-	if (depth > scene.options.maxRayDepth) return scene.options.backgroundColor;
+	if (depth > scene.options.maxRayDepth) return scene.getSkybox(ray.dir);
 	IntersectInfo intrInfo;
 	if (trace(ray, scene.objects, intrInfo)) {
 		Vec3f hitColor = intrInfo.hitObject->color;
@@ -549,7 +650,8 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 		else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
 			// get info from reflected ray
 			Ray reflectedRay{ hitPoint + scene.options.bias * hitNormal, ray.dir - 2 * ray.dir.dotProduct(hitNormal) * hitNormal };
-			hitColor = 0.8f * castRay(reflectedRay, scene, depth + 1);
+			hitColor = castRay(reflectedRay, scene, depth + 1);
+			hitColor *= 0.8f;
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Transparent) {
 			float kr = fresnel(ray.dir, hitNormal, intrInfo.hitObject->indexOfRefraction);
@@ -572,7 +674,7 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 		
 		return hitColor;
 	}
-	return scene.options.backgroundColor;
+	return scene.getSkybox(ray.dir);
 }
 
 Vec3f AreaLight::getTotalIlluminance(const Vec3f& hitPoint, const Vec3f& hitNormal, const ObjectVector& objects)

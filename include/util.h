@@ -78,6 +78,8 @@ inline bool strEquals(const std::string_view& str1, const std::string_view& str2
 
 int saveImage(Vec3f* frameBuffer, const Options& options);
 
+unsigned char* loadBMP(const char* filename, int& width, int& height);
+
 #define LOG_ERROR logError(__FILE__, __FUNCSIG__, __LINE__);
 
 inline void logError(const char* file, const char* func, int line)
