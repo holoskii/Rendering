@@ -13,6 +13,7 @@ enum class LightType { BaseLight, DistantLight, PointLight, AreaLight };
 class Object;
 using ObjectVector = std::vector<std::unique_ptr<Object>>;
 #include "geometry.h"
+#include "objects.h"
 
 class Light
 {
@@ -54,16 +55,11 @@ public:
 	void setPoints();
 	void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const;
 
-	// defined in scene.cpp to avoid circular dependency
-	Vec3f getTotalIlluminance(const Vec3f& hitPoint, const Vec3f& hitNormal, const ObjectVector& objects);
-
 	Vec3f pos;
 	Vec3f i;
 	Vec3f j;
 	int samples = 1;
-	int base_samples = 1;
 
 	bool pointsCreated = false;
-	std::vector<Vec3f> basePoints;
 	std::vector<Vec3f> points;
 };

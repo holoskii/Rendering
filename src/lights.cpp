@@ -54,16 +54,9 @@ void AreaLight::setPoints()
 				points.push_back(anglePos + (i * (((float)ii) / (samples - 1))) + (j * (((float)jj) / (samples - 1))));
 			}
 		}
-
-		for (int ii = 0; ii < base_samples; ii++) {
-			for (int jj = 0; jj < base_samples; jj++) {
-				basePoints.push_back(anglePos + (i * (((float)ii) / (base_samples - 1))) + (j * (((float)jj) / (base_samples - 1))));
-			}
-		}
 	}
 	else {
 		points.push_back(pos);
-		basePoints.push_back(pos);
 	}
 }
 

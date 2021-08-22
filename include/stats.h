@@ -9,9 +9,10 @@ namespace stats
 {
 	inline std::atomic<int> rayTriTests{ 0 };
 	inline std::atomic<int> accelStructTests{ 0 };
-	inline std::atomic<int> triCopiesCount{ 0 };
-	inline std::atomic<int> meshCount{ 0 };
+	inline std::atomic<size_t> triCopiesCount{ 0 };
+	inline std::atomic<size_t> meshCount{ 0 };
 	inline std::atomic<int> acCount{ 0 };
+	inline std::atomic<int> raysCasted{ 0 };
 
 	inline void clearStats()
 	{
@@ -32,7 +33,7 @@ namespace stats
 		std::cout << "Total triangle copies:              " << std::setw(10) << triCopiesCount.load() << '\n';
 		std::cout << "Total triangle count:               " << std::setw(10) << meshCount.load() << '\n';
 		std::cout << "Acceleration structure count:       " << std::setw(10) << acCount.load() << '\n';
-		
+		std::cout << "Rays casted:					      " << std::setw(10) << raysCasted.load() << '\n';
 
 		rayTriTests.store(0);
 		accelStructTests.store(0);

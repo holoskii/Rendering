@@ -13,7 +13,7 @@
 
 int saveImage(Vec3f* frameBuffer, const Options& options)
 {
-    std::string path = options.imagePath + "\\" + options.imageName + std::string(".ppm");
+    std::string path = options.rootPath + "\\" + options.imageName + std::string(".ppm");
     std::ofstream of(path, std::ios::out | std::ios::binary);
     if (!of.good()) {
         std::cout << "Error during file output\n";

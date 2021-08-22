@@ -15,7 +15,6 @@ class Triangle;
 using ObjectVector = std::vector<std::unique_ptr<Object>>;
 enum class ObjectType { Object, Sphere, Plane, Mesh };
 enum class MaterialType { Diffuse, Reflective, Transparent, Phong };
-enum class PatternType { None, Stripped, Chessboard, ShadedChessboard };
 
 #include "geometry.h"
 #include "options.h"
@@ -26,9 +25,7 @@ public:
 	Object(const Vec3f& a_center = 1, const Vec3f& a_color = 1,
 		const MaterialType& a_materialType = MaterialType::Diffuse);
 	virtual ~Object();
-	float getPattern(Vec2f texture) const;
-	virtual bool intersectObject(const Vec3f& orig, const Vec3f& dir,
-		float& t0, Vec2f& uv) const = 0;
+	virtual bool intersectObject(const Ray& ray, float& t0, Vec2f& uv) const = 0;
 	virtual void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr,
 		const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const = 0;
 
@@ -36,7 +33,6 @@ public:
 	Vec3f color;
 	MaterialType materialType;
 	ObjectType objectType = ObjectType::Object;
-	PatternType pattern = PatternType::None;
 	float indexOfRefraction = 1.4f; // used for Transparent only
 	float ambient = 0.1f;			// used for Phong only
 	float difuse = 0.1f;			// used for Phong only
@@ -63,7 +59,7 @@ public:
 	Mesh();
 	~Mesh();
 
-	bool intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const;
+	bool intersectObject(const Ray& ray, float& t0, Vec2f& uv) const;
 	bool intersectMesh(const Ray& ray, float& t0, const Triangle*& triPtr,
 		Vec2f& uv) const;
 	void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr,
@@ -109,7 +105,7 @@ class Sphere : public Object
 public:
 	Sphere(const Vec3f& a_center = 0, const float a_r = 1, const Vec3f& a_color = 1,
 		const MaterialType& a_materialType = MaterialType::Diffuse);
-	bool intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const;
+	bool intersectObject(const Ray& ray, float& t0, Vec2f& uv) const;
 	void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv,
 		Vec3f& hitNormal, Vec2f& tex) const;
 
@@ -122,7 +118,7 @@ class Plane : public Object
 public:
 	Plane(const Vec3f& a_center = 1, const Vec3f& a_normal = { 0, 1, 0 },
 		const Vec3f& a_color = 1, const MaterialType& a_materialType = MaterialType::Diffuse);
-	bool intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const;
+	bool intersectObject(const Ray& ray, float& t0, Vec2f& uv) const;
 	void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv,
 		Vec3f& hitNormal, Vec2f& tex) const;
 

@@ -13,26 +13,6 @@ Object::Object(const Vec3f& a_center, const Vec3f& a_color, const MaterialType& 
 
 Object::~Object() {}
 
-float Object::getPattern(Vec2f texture) const
-{
-	if (pattern == PatternType::None)
-		return 1.0f;
-	float scaleS = 10, scaleT = 10;
-	float angle = degToRad(45);
-	float s = texture.x * cos(angle) - texture.y * sin(angle);
-	float t = texture.y * cos(angle) + texture.x * sin(angle);
-	float res = 1.0f;
-
-	if (pattern == PatternType::Stripped)
-		res = (modulo(s * scaleS) < 0.5);
-	else if (pattern == PatternType::Chessboard)
-		res = (float)((modulo(s * scaleS) < 0.5) ^ (modulo(t * scaleT) < 0.5));
-	else if (pattern == PatternType::ShadedChessboard)
-		res = (cos(texture.y * 2 * M_PI * scaleT * t) * sin(texture.x * 2 * M_PI * scaleS * s) + 1) * 0.5f;
-	return res < 0.1f ? 0.1f : res;
-}
-
-
 Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c)
 	: a(a_a), b(a_b), c(a_c)
 {
@@ -99,7 +79,7 @@ Mesh::~Mesh()
 		delete tri;
 }
 
-bool Mesh::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const
+bool Mesh::intersectObject(const Ray& ray, float& t0, Vec2f& uv) const
 {
 	std::cout << "Object intersect called with mesh\n";
 	std::exit(-1);
@@ -329,7 +309,7 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 		tris = a_tris;
 	}
 
-	if (a_tris.size() <= a_depth * options.acPenalty) {
+	if (a_tris.size() <= a_depth * (size_t)options.acPenalty) {
 		if (options::collectStatistics) {
 			stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
 		}
@@ -610,10 +590,10 @@ Sphere::Sphere(const Vec3f& a_center, const float a_r, const Vec3f& a_color,
 	objectType = ObjectType::Sphere;
 }
 
-bool Sphere::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const
+bool Sphere::intersectObject(const Ray& ray, float& t0, Vec2f& uv) const
 {
-	Vec3f L = pos - orig;
-	float tca = L.dotProduct(dir);
+	Vec3f L = pos - ray.orig;
+	float tca = L.dotProduct(ray.dir);
 	float d2 = L.dotProduct(L) - tca * tca;
 	if (d2 > r2) return false;
 	float thc = sqrtf(r2 - d2);
@@ -643,12 +623,12 @@ Plane::Plane(const Vec3f& a_center, const Vec3f& a_normal, const Vec3f& a_color,
 	objectType = ObjectType::Plane;
 }
 
-bool Plane::intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const
+bool Plane::intersectObject(const Ray& ray, float& t0, Vec2f& uv) const
 {
-	float denom = dir.dotProduct(normal);
+	float denom = ray.dir.dotProduct(normal);
 	if (fabs(denom) < 1e-8)
 		return false;
-	t0 = ((pos - orig).dotProduct(normal)) / denom;
+	t0 = ((pos - ray.orig).dotProduct(normal)) / denom;
 	return (t0 >= 0);
 }
 

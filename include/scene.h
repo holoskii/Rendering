@@ -28,7 +28,7 @@ public:
 	static Vec3f refract(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction);
 	static float fresnel(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction);
 
-	static bool trace(const Ray& ray, const ObjectVector& objects, IntersectInfo& intrInfo);
+	static bool trace(const Ray& ray, const ObjectVector& objects, const LightsVector& lights, IntersectInfo& intrInfo);
 
 	static Vec3f castRay(const Ray& ray, const Scene& scene, const int depth);
 };
