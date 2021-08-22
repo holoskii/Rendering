@@ -23,13 +23,13 @@ enum class PatternType { None, Stripped, Chessboard, ShadedChessboard };
 class Object
 {
 public:
-	Object(const Vec3f& a_center = 1, const Vec3f& a_color = 1, 
+	Object(const Vec3f& a_center = 1, const Vec3f& a_color = 1,
 		const MaterialType& a_materialType = MaterialType::Diffuse);
 	virtual ~Object();
 	float getPattern(Vec2f texture) const;
-	virtual bool intersectObject(const Vec3f& orig, const Vec3f& dir, 
+	virtual bool intersectObject(const Vec3f& orig, const Vec3f& dir,
 		float& t0, Vec2f& uv) const = 0;
-	virtual void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, 
+	virtual void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr,
 		const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const = 0;
 
 	Vec3f pos;
@@ -107,10 +107,10 @@ public:
 class Sphere : public Object
 {
 public:
-	Sphere(const Vec3f& a_center = 0, const float a_r = 1, const Vec3f& a_color = 1, 
+	Sphere(const Vec3f& a_center = 0, const float a_r = 1, const Vec3f& a_color = 1,
 		const MaterialType& a_materialType = MaterialType::Diffuse);
 	bool intersectObject(const Vec3f& orig, const Vec3f& dir, float& t0, Vec2f& uv) const;
-	void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv, 
+	void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv,
 		Vec3f& hitNormal, Vec2f& tex) const;
 
 	float r;

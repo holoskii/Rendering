@@ -1,16 +1,21 @@
-// utility functions and functions working with file IO
+// utility functions
 #pragma once
 
+#define _USE_MATH_DEFINES
+#include <math.h>
 #include <iostream>
 #include <vector>
-#include <cmath>
 #include <sstream>
-#include <cassert>
 
 #include "geometry.h"
 #include "options.h"
 
-constexpr float M_PI = 3.14159265358979323846f;
+#define LOG_ERROR logError(__FILE__, __FUNCSIG__, __LINE__);
+
+inline void logError(const char* file, const char* func, int line)
+{
+	std::cout << "Error: " << file << ' ' << func << ' ' << line << '\n';
+}
 
 inline float modulo(const float& f)
 {
@@ -24,12 +29,12 @@ inline float clamp(const float low, const float high, const float val)
 
 inline float degToRad(const float& f)
 {
-	return f * (M_PI / 180.0f);
+	return f * (float)(M_PI) / 180.0f;
 }
 
 inline float radToDeg(const float& f)
 {
-	return f * (180.0f / M_PI);
+	return f * (180.0f / (float)(M_PI));
 }
 
 inline int strToInt(const std::string_view& str)
@@ -37,7 +42,7 @@ inline int strToInt(const std::string_view& str)
 	int result = 0;
 	std::stringstream ss{ std::string(str) };
 	ss >> result;
-	assert(ss.eof() || ss.good());
+	if (!ss.eof() && !ss.good()) LOG_ERROR
 	return result;
 }
 
@@ -46,13 +51,13 @@ inline float strToFloat(const std::string_view& str)
 	float result = 0;
 	std::stringstream ss{ std::string(str) };
 	ss >> result;
-	assert(ss.eof() || ss.good());
+	if (!ss.eof() && !ss.good()) LOG_ERROR
 	return result;
 }
 
 inline Vec3f str3ToFloat(std::vector<std::string> vec)
 {
-	assert(vec.size() == 3);
+	if (vec.size() != 3) LOG_ERROR
 	return Vec3f{ strToFloat(vec[0]), strToFloat(vec[1]), strToFloat(vec[2]) };
 }
 
@@ -79,11 +84,3 @@ inline bool strEquals(const std::string_view& str1, const std::string_view& str2
 int saveImage(Vec3f* frameBuffer, const Options& options);
 
 unsigned char* loadBMP(const char* filename, int& width, int& height);
-
-#define LOG_ERROR logError(__FILE__, __FUNCSIG__, __LINE__);
-
-inline void logError(const char* file, const char* func, int line)
-{
-	std::cout << "Error: " << file << ' ' << func << ' ' << line << '\n';
-}
-

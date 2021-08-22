@@ -200,7 +200,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 			// read vertex
 			float x, y, z;
 			int res = sscanf(c_line, "%f %f %f", &x, &y, &z);
-			assert(res == 3);
+			if (res != 3) LOG_ERROR
 			min.x = std::min(x, min.x); min.y = std::min(y, min.y);
 			min.z = std::min(z, min.z); max.x = std::max(x, max.x);
 			max.y = std::max(y, max.y); max.z = std::max(z, max.z);
@@ -210,7 +210,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 			// read normal
 			float x, y, z;
 			int res = sscanf_s(c_line, "%f %f %f", &x, &y, &z);
-			assert(res == 3);
+			if (res != 3) LOG_ERROR
 			normalData.emplace_back(Vec3f{ x, y, z }.normalize());
 		}
 		else if (strcmp(lineHeader, "f") == 0) {
@@ -290,7 +290,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 						tris.push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
 				}
 				else {
-					assert(ni.size() == vi.size());
+					if (ni.size() != vi.size()) LOG_ERROR
 					for (size_t i = 1; i < vi.size() - 1; i++)
 						tris.push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
 							normalData.at(ni.at(0) - 1), normalData.at(ni.at(i) - 1), normalData.at(ni.at(i + 1) - 1)));
@@ -328,7 +328,6 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 	if (!options::useAC) {
 		tris = a_tris;
 	}
-
 
 	if (a_tris.size() <= a_depth * options.acPenalty) {
 		if (options::collectStatistics) {
@@ -446,7 +445,7 @@ bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 	const Triangle* tempTriPtr;
 	t0 = std::numeric_limits<float>::max();
 	if (left) {
-		assert(right);
+		if (!right) LOG_ERROR
 		if (left->intersectAccelStruct(ray, tempT, tempTriPtr, tempUV) && tempT < t0) {
 			inter = true;
 			t0 = tempT;
@@ -482,7 +481,7 @@ float AccelerationStructure::calculateSAH(const int orientation, const std::vect
 	int triLeft = 0;
 	int triRight = 0;
 	if (orientation == 0) {
-		assert(bounds[0].x <= boundary && bounds[1].x >= boundary);
+		if (bounds[0].x > boundary && bounds[1].x < boundary) LOG_ERROR
 		for (const Triangle* tri : tris) {
 			if (tri->a.x <= boundary || tri->b.x <= boundary || tri->c.x <= boundary)
 				triLeft++;
@@ -492,7 +491,7 @@ float AccelerationStructure::calculateSAH(const int orientation, const std::vect
 		sah = triLeft * (boundary - bounds[0].x) + triRight * (bounds[1].x - boundary);
 	}
 	else if (orientation == 1) {
-		assert(bounds[0].y <= boundary && bounds[1].y >= boundary);
+		if (bounds[0].y > boundary && bounds[1].y < boundary) LOG_ERROR
 		for (const Triangle* tri : tris) {
 			if (tri->a.y <= boundary || tri->b.y <= boundary || tri->c.y <= boundary)
 				triLeft++;
@@ -502,7 +501,7 @@ float AccelerationStructure::calculateSAH(const int orientation, const std::vect
 		sah = triLeft * (boundary - bounds[0].y) + triRight * (bounds[1].y - boundary);
 	}
 	else if (orientation == 2) {
-		assert(bounds[0].z <= boundary && bounds[1].z >= boundary);
+		if (bounds[0].z > boundary && bounds[1].z < boundary) LOG_ERROR
 		for (const Triangle* tri : tris) {
 			if (tri->a.z <= boundary || tri->b.z <= boundary || tri->c.z <= boundary)
 				triLeft++;
@@ -631,8 +630,8 @@ void Sphere::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr,
 	hitNormal = hitPoint - pos;
 	hitNormal.normalize();
 
-	tex.x = (1.0f + atan2(hitNormal.z, hitNormal.x) / M_PI) * 0.5f;
-	tex.y = acosf(hitNormal.y) / M_PI;
+	tex.x = (1.0f + atan2(hitNormal.z, hitNormal.x) / (float)(M_PI)) * 0.5f;
+	tex.y = acosf(hitNormal.y) / (float)(M_PI);
 }
 
 

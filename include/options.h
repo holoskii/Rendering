@@ -9,8 +9,6 @@ class Options
 {
 public:
 	size_t width = 800, height = 600;
-	float fov = 90.0f;
-	float zNear = 0.1f, zFar = 100.0f;
 	float bias = 0.0001f;
 	int maxRayDepth = 5;
 	int nWorkers = 8;

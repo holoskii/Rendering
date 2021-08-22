@@ -84,11 +84,13 @@ bool Scene::loadScene(const std::string& sceneName)
         // finish previous block
         if (strContains(str, "[")) {
             if (blockType == BlockType::Light) {
-                assert(light != nullptr);
+				if (light == nullptr)
+					LOG_ERROR
                 lights.push_back(std::unique_ptr<Light>(light));
             }
             else if (blockType == BlockType::Object) {
-                assert(object != nullptr);
+				if (object == nullptr)
+					LOG_ERROR
                 objects.push_back(std::unique_ptr<Object>(object));
             }
         }
@@ -110,7 +112,7 @@ bool Scene::loadScene(const std::string& sceneName)
 
         // select block
         if (str[0] == '[') {
-            assert(blockMap.find(str) != blockMap.end());
+			if (blockMap.find(str) == blockMap.end()) LOG_ERROR
             blockType = blockMap[str];
             if (blockType == BlockType::None)
                 break;
@@ -119,7 +121,7 @@ bool Scene::loadScene(const std::string& sceneName)
 
         // parse the line
         if (blockType == BlockType::Options) {
-            assert(strContains(str, "="));
+			if (!strContains(str, "=")) LOG_ERROR
             std::string_view key(str.c_str(), str.find('='));
             std::string_view value(str.c_str() + str.find('=') + 1);
 
@@ -128,7 +130,7 @@ bool Scene::loadScene(const std::string& sceneName)
             else if (strEquals(key, "height"))
                 options.height = strToInt(value);
             else if (strEquals(key, "fov"))
-                options.fov = strToFloat(value);
+                camera.fov = strToFloat(value);
             else if (strEquals(key, "image_name"))
                 options.imageName = std::string(value);
             else if (strEquals(key, "n_workers="))
@@ -145,7 +147,7 @@ bool Scene::loadScene(const std::string& sceneName)
                 camera.rot = str3ToFloat(splitString(value, ','));
         }
         else if (blockType == BlockType::Light) {
-            assert(strContains(str, "="));
+			if (!strContains(str, "=")) LOG_ERROR
             std::string_view key(str.c_str(), str.find('='));
             std::string_view value(str.c_str() + str.find('=') + 1);
 
@@ -164,36 +166,36 @@ bool Scene::loadScene(const std::string& sceneName)
             else if (strEquals(key, "intensity"))
                 light->intensity = strToFloat(value);
             if (strEquals(key, "direction")) {
-                assert(light->type == LightType::DistantLight);
+				if (light->type != LightType::DistantLight) LOG_ERROR
                 static_cast<DistantLight*>(light)->dir = str3ToFloat(splitString(value, ','));
             }
             else if (strEquals(key, "position")) {
-                assert(light->type == LightType::PointLight);
+				if (light->type != LightType::PointLight) LOG_ERROR
                 static_cast<PointLight*>(light)->pos = str3ToFloat(splitString(value, ','));
             }
 			else if (strEquals(key, "pos")) {
-				assert(light->type == LightType::AreaLight);
+				if (light->type != LightType::AreaLight) LOG_ERROR
 				static_cast<AreaLight*>(light)->pos = str3ToFloat(splitString(value, ','));
 			}
 			else if (strEquals(key, "i")) {
-				assert(light->type == LightType::AreaLight);
+				if (light->type != LightType::AreaLight) LOG_ERROR
 				static_cast<AreaLight*>(light)->i = str3ToFloat(splitString(value, ','));
 			}
 			else if (strEquals(key, "j")) {
-				assert(light->type == LightType::AreaLight);
+				if (light->type != LightType::AreaLight) LOG_ERROR
 				static_cast<AreaLight*>(light)->j = str3ToFloat(splitString(value, ','));
 			}
 			else if (strEquals(key, "samples")) {
-				assert(light->type == LightType::AreaLight);
+				if (light->type != LightType::AreaLight) LOG_ERROR
 				static_cast<AreaLight*>(light)->samples = strToInt(value);
 			}
 			else if (strEquals(key, "base_samples")) {
-				assert(light->type == LightType::AreaLight);
+				if (light->type != LightType::AreaLight) LOG_ERROR
 				static_cast<AreaLight*>(light)->base_samples = strToInt(value);
 			}
         }
         else if (blockType == BlockType::Object) {
-            assert(strContains(str, "="));
+           if (!strContains(str, "=")) LOG_ERROR
             std::string_view key(str.c_str(), str.find('='));
             std::string_view value(str.c_str() + str.find('=') + 1);
 
@@ -311,7 +313,7 @@ Vec3f Scene::getSkybox(const Vec3f& dir) const
 
 	auto toPixel = [](const float& v, const int& max)
 	{
-		int val = (v + 1.0f) / 2.0f * max;
+		int val = (int)((v + 1.0f) / 2.0f * max);
 		if (val >= max) val = max - 1;
 		return val;
 	};
@@ -321,14 +323,14 @@ Vec3f Scene::getSkybox(const Vec3f& dir) const
 	if (max == fabs(adir.z)) {
 		if (adir.z < 0) {
 			adir = dir * (1 / -dir.z);
-			int i = (adir.y + 1.0f) / 2.0f * skyboxHeight;
-			int j = (adir.x + 1.0f) / 2.0f * skyboxWidth;
+			int i = toPixel(adir.y, skyboxHeight);
+			int j = toPixel(adir.x, skyboxWidth);
 			return skyboxes[1][i * skyboxWidth + j];
 		}
 		else {
 			adir = dir * (1 / dir.z);
-			int i = (adir.y + 1.0f) / 2.0f * skyboxHeight;
-			int j = (-adir.x + 1.0f) / 2.0f * skyboxWidth;
+			int i = toPixel(adir.y, skyboxHeight);
+			int j = toPixel(-adir.x, skyboxWidth);
 			return skyboxes[3][i * skyboxWidth + j];
 		}
 	}
@@ -367,12 +369,10 @@ Vec3f Scene::getSkybox(const Vec3f& dir) const
 void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 {
 #ifdef _DEBUG
-	if (options::outputProgress) {
-		auto lastStat = std::chrono::high_resolution_clock::now();
-	}
+	auto lastStat = std::chrono::high_resolution_clock::now();
 #endif // _DEBUG
 
-	const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
+	const float scale = tanf(camera.fov * 0.5f / 180.0f * (float)(M_PI));
 	const float imageAspectRatio = (options.width) / (float)options.height;
 	for (size_t y = y0; y < y1; y++) {
 		for (size_t x = 0; x < options.width; x++) {
@@ -449,7 +449,7 @@ long long Scene::render()
 
 	if (options::showAC) {
 		const Vec3f orig = { 0, 0, 0 };
-		const float scale = tanf(options.fov * 0.5f / 180.0f * M_PI);
+		const float scale = tanf(camera.fov * 0.5f / 180.0f * (float)(M_PI));
 		float imageAspectRatio = (options.width) / (float)options.height;
 
 		int acMax = 0;
@@ -468,7 +468,7 @@ long long Scene::render()
 
 		for (size_t y = 0; y < options.height; y++) {
 			for (size_t x = 0; x < options.width; x++) {
-				float val = acBuffer[x + y * options.width];
+				float val = (float)acBuffer[x + y * options.width];
 				val /= acMax;
 				frameBuffer[x + y * options.width] = Vec3f{ val };
 			}
@@ -601,14 +601,10 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 	if (depth > scene.options.maxRayDepth) return scene.getSkybox(ray.dir);
 	IntersectInfo intrInfo;
 	if (trace(ray, scene.objects, intrInfo)) {
-		Vec3f hitColor = intrInfo.hitObject->color;
-		Vec3f hitNormal;
 		Vec2f hitTexCoordinates;
+		Vec3f hitNormal, hitColor = { 0 };
 		Vec3f hitPoint = ray.orig + ray.dir * intrInfo.tNear;
 		intrInfo.hitObject->getSurfaceData(hitPoint, intrInfo.triPtr, intrInfo.uv, hitNormal, hitTexCoordinates);
-
-		Vec3f objectColor = intrInfo.hitObject->color;
-		hitColor = { 0 };
 
 		if (intrInfo.hitObject->materialType == MaterialType::Diffuse) {
 			// for diffuse objects collect light from all visible sources
@@ -616,7 +612,7 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 				if (scene.lights[i]->type == LightType::AreaLight) {
 					AreaLight* light = dynamic_cast<AreaLight*>(scene.lights[i].get());
 					Vec3f intensity = light->getTotalIlluminance(hitPoint + hitNormal * scene.options.bias, hitNormal, scene.objects);
-					hitColor += objectColor * intensity;
+					hitColor += intrInfo.hitObject->color * intensity;
 				}
 				else {
 					IntersectInfo intrShadInfo;
@@ -624,31 +620,31 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 					scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
 					bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, intrShadInfo);
 					float pattern = intrInfo.hitObject->getPattern(hitTexCoordinates);
-					hitColor += (objectColor * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
+					hitColor += (intrInfo.hitObject->color * lightIntensity) * pattern * vis * std::max(0.f, hitNormal.dotProduct(-lightDir));
 				}
 			}
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Phong) {
-			std::cout << "No phong yet\n";
-			//Vec3f diffuseLight = 0, specularLight = 0;
-			//for (uint32_t i = 0; i < scene.lights.size(); ++i) {
-			//	Vec3f lightDir, lightIntensity;
-			//	IntersectInfo isectShad;
-			//	scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, isectShad.tNear);
+			//std::cout << "No phong yet\n";
+			Vec3f diffuseLight = 0, specularLight = 0;
+			for (uint32_t i = 0; i < scene.lights.size(); ++i) {
+				Vec3f lightDir, lightIntensity;
+				IntersectInfo isectShad;
+				scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, isectShad.tNear);
 
-			//	bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, isectShad);
+				bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, isectShad);
 
-			//	// compute the diffuse component
-			//	diffuseLight += vis * intrInfo.hitObject->difuse * lightIntensity * std::max(0.f, hitNormal.dotProduct(-lightDir));
+				// compute the diffuse component
+				diffuseLight += vis * intrInfo.hitObject->difuse * lightIntensity * std::max(0.f, hitNormal.dotProduct(-lightDir));
 
-			//	// compute the specular component
-			//	// what would be the ideal reflection direction for this light ray
-			//	Vec3f R = reflect(lightDir, hitNormal);
-			//	specularLight += vis * intrInfo.hitObject->specular * lightIntensity * std::pow(std::max(0.f, R.dotProduct(-ray.dir)), intrInfo.hitObject->nSpecular); // * intrInfo.hitObject->kReflect)
-			//		// + (intrInfo.hitObject->color * (1 - intrInfo.hitObject->kReflect));
-			//}
-			//hitColor = objectColor * intrInfo.hitObject->ambient + diffuseLight + specularLight;
-			//hitColor = hitColor * intrInfo.hitObject->getPattern(hitTexCoordinates);
+				// compute the specular component
+				// what would be the ideal reflection direction for this light ray
+				Vec3f R = reflect(lightDir, hitNormal);
+				specularLight += vis * intrInfo.hitObject->specular * lightIntensity * std::pow(std::max(0.f, R.dotProduct(-ray.dir)), intrInfo.hitObject->nSpecular); // * intrInfo.hitObject->kReflect)
+					// + (intrInfo.hitObject->color * (1 - intrInfo.hitObject->kReflect));
+			}
+			hitColor = intrInfo.hitObject->color * intrInfo.hitObject->ambient + diffuseLight + specularLight;
+			hitColor = hitColor * intrInfo.hitObject->getPattern(hitTexCoordinates);
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
 			// get info from reflected ray

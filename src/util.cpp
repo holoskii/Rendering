@@ -44,7 +44,7 @@ unsigned char* loadBMP(const char* filename, int& width, int& height)
 {
     int i;
     FILE* f = fopen(filename, "rb");
-    assert(f != NULL);
+    if (f == NULL) LOG_ERROR
     unsigned char info[54];
 
     // read the 54-byte header
