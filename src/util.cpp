@@ -13,23 +13,52 @@
 
 int saveImage(Vec3f* frameBuffer, const Options& options)
 {
-    std::string path = options.rootPath + "\\" + options.imageName + std::string(".ppm");
+    std::string path = options.rootPath + "\\" + options.imageName + std::string(".bmp");
     std::ofstream of(path, std::ios::out | std::ios::binary);
     if (!of.good()) {
         std::cout << "Error during file output\n";
         return -1;
     }
 
+    const int headerSize = 54;
+    char header[headerSize] = { 0 };
+    int paddingBytes = options.width % 4 == 0 ? 0 : 4 - options.width * 3 % 4;
+    int arraySize = options.height * (options.width + paddingBytes) * 3;
+    int totalSize = headerSize + arraySize;
+
+    
+    memcpy(header, "BM", 2);
+    *(int*)(header + 0x2) = totalSize;
+    *(int*)(header + 0xA) = headerSize;
+    *(int*)(header + 0xE) = headerSize - 14;
+    *(int*)(header + 0x12) = options.width;
+    *(int*)(header + 0x16) = options.height;
+    *(header + 0x1A) = 1;
+    *(header + 0x1C) = 24;
+    *(int*)(header + 0x22) = arraySize;
+    *(int*)(header + 0x26) = 2835;
+    *(int*)(header + 0x2A) = 2835;
+
     // intermediate buffer significantly speeds up file write process
     char* data = new char[options.height * options.width * 3];
     char* dataPtr = data;
-    for (int i = 0; i < options.height * options.width; i++)
-        for (unsigned char j = 0; j < 3; j++)
-            *dataPtr++ = static_cast<char>(clamp(0.0f, 1.0f, frameBuffer[i][j]) * 255);
+    for (int i = options.height - 1; i >= 0; i--) {
+        for (int j = 0; j < options.width; j++) {
+            int v = i * options.width + j;
+            for (int k = 2; k >= 0; k--) {
+                *dataPtr++ = static_cast<char>(clamp(0.0f, 1.0f, frameBuffer[v][k]) * 255);
+            }
+        }
+        for (int j = 0; j < paddingBytes; j++) {
+            dataPtr++;
+        }
+    }
 
-    of << "P6\n" << std::to_string(options.width) << " " << std::to_string(options.height) << "\n" << std::to_string(255) << "\n";
-    of.write(data, options.height * options.width * 3);
+
+    of.write(header, headerSize);
+    of.write(data, arraySize);
     of.close();
+
 #ifdef _WIN32
     wchar_t* wPath = new wchar_t[strlen(path.c_str()) + 1];
     mbstowcs(wPath, path.c_str(), strlen(path.c_str()) + 1);
