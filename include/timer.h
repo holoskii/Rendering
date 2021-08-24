@@ -1,4 +1,4 @@
-// timer to measure execution time in milliseconds
+// Timer to measure execution time in milliseconds
 #pragma once
 
 #include <string>

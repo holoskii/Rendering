@@ -37,6 +37,7 @@ void PointLight::illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightInt
 	distance = (point - pos).length();
 }
 
+
 AreaLight::AreaLight()
 {
 	type = LightType::AreaLight;
@@ -44,8 +45,9 @@ AreaLight::AreaLight()
 
 void AreaLight::setPoints()
 {
-	if (pointsCreated)
-		return;
+	if (pointsCreated) return;
+
+	// calculation are easier knowing angle coordinate
 	Vec3f anglePos = pos - (i / 2.0f) - (j / 2.0f);
 	pointsCreated = true;
 	if (samples > 1) {
@@ -62,5 +64,6 @@ void AreaLight::setPoints()
 
 void AreaLight::illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const
 {
+	// illuminate cannot be called on Area Light
 	std::cout << "Area light illuminate, error\n";
 }

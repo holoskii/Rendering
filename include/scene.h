@@ -13,6 +13,7 @@ class Scene;
 #include "lights.h"
 #include "options.h"
 
+// Store all intersect info in one structure to reduce number of parameters
 struct IntersectInfo
 {
 	const Object* hitObject = nullptr;
@@ -21,18 +22,27 @@ struct IntersectInfo
 	Vec2f uv{ -1,-1 };
 };
 
+// Some static functions
 class Render
 {
 public:
+	// Get reflected ray
 	static Vec3f reflect(const Vec3f& dir, const Vec3f& normal);
+	
+	// Get refracted ray
 	static Vec3f refract(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction);
+	
+	// Get Fresnel coefficient
 	static float fresnel(const Vec3f& dir, const Vec3f& normal, const float& indexOfRefraction);
 
-	static bool trace(const Ray& ray, const ObjectVector& objects, const LightsVector& lights, IntersectInfo& intrInfo);
+	// Check if anything intersects with the ray
+	static bool trace(const Ray& ray, const ObjectVector& objects, IntersectInfo& intrInfo);
 
+	// Cast ray
 	static Vec3f castRay(const Ray& ray, const Scene& scene, const int depth);
 };
 
+// Stores all camera info
 class Camera
 {
 public:
@@ -49,6 +59,7 @@ public:
 	bool cameraRotated = false;
 };
 
+// Stores scene info
 class Scene
 {
 public:
@@ -59,9 +70,11 @@ public:
 	Options options;
 	Camera camera;
 
+	// Skybox info
 	int skyboxWidth, skyboxHeight;
 	Vec3f* skyboxes[6] = { nullptr };
 
+	// Info for statistics
 	std::atomic<int> finishedPixels{ 0 };
 	std::atomic<int> finishedWorkers{ 0 };
 

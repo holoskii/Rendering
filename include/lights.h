@@ -15,17 +15,23 @@ using ObjectVector = std::vector<std::unique_ptr<Object>>;
 #include "geometry.h"
 #include "objects.h"
 
+// Base light class. Stores basic info like color and intensity
 class Light
 {
 public:
+	// Basic constructor
 	Light(const Vec3f& a_color = 1, const float& a_intensity = 1);
-	virtual void illuminate(const Vec3f& point, Vec3f&, Vec3f&, float&) const = 0;
+	
+	// Function that is used to determine light properties such as direction, intensity
+	// and distance at given point
+	virtual void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const = 0;
 
 	Vec3f color;
 	float intensity;
 	LightType type = LightType::BaseLight;
 };
 
+// Distant light is light that illuminates scene with parallel rays
 class DistantLight : public Light
 {
 public:
@@ -35,6 +41,7 @@ public:
 	Vec3f dir;
 };
 
+// Point light has position, illuminates all around it
 class PointLight : public Light
 {
 public:
@@ -55,11 +62,12 @@ public:
 	void setPoints();
 	void illuminate(const Vec3f& point, Vec3f& lightDir, Vec3f& lightIntensity, float& distance) const;
 
-	Vec3f pos;
+	Vec3f pos;	// pos - coordinates of parallelogram center
 	Vec3f i;
 	Vec3f j;
 	int samples = 1;
 
+	// Coordinates of smaller light sources
 	bool pointsCreated = false;
 	std::vector<Vec3f> points;
 };

@@ -1,4 +1,4 @@
-// class describing options, and namespace for global functions
+// Class describing options, and namespace for global setting
 #pragma once
 
 #include <string>
@@ -8,34 +8,29 @@
 class Options
 {
 public:
-	size_t width = 800, height = 600;
-	float bias = 0.0001f;
+	size_t width = 800, height = 600;		// screen dimensions in pixels
+	float bias = 0.0001f;	// bias is used to avoid self-intersections
 	int maxRayDepth = 5;
 	int nWorkers = 8;
-
-	
-	Vec3f backgroundColor{ 0.0f, 0.0f, 0.0f };
-
-	int acPenalty = 1;
-
+	Vec3f backgroundColor { 0.0f, 0.0f, 0.0f };
+	int acPenalty = 1;	// determines amount of acceleration structures
+	char names[6][64];	// skybox names
 	std::string rootPath = "D:\\dev\\CG\\RayTracing";
 	std::string imageName = "out";
-
-	char names[6][64];
 };
 
 
 namespace options
 {
-	// global settings are stored here
-	// keeping them constexpr is better for performance
-	constexpr bool outputProgress			= 1;
-	constexpr bool useBackfaceCulling		= 1;
-	constexpr bool collectStatistics		= 0;
-	constexpr bool enableOutput				= 1;
-	constexpr bool imageOutput				= 1;
-	constexpr bool useAC					= 1;
-	constexpr bool showAC					= 0;
-	constexpr bool useSkybox				= 1;
-	constexpr bool useTextures				= 1;
+	// global settings
+	inline bool outputProgress			= 1;
+	inline bool useBackfaceCulling		= 1;
+	inline bool collectStatistics		= 0;
+	inline bool enableOutput			= 1;
+	inline bool imageOutput				= 1;
+	inline bool useAC					= 1;
+	inline bool showAC					= 0;
+	inline bool useSkybox				= 1;
+	inline bool useTextures				= 1;
+	inline bool showNormals				= 0;
 }

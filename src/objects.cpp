@@ -9,7 +9,7 @@
 #include "stats.h"
 
 Object::Object(const Vec3f& a_center, const Vec3f& a_color, const MaterialType& a_materialType)
-	: color(a_color), pos(a_center), materialType(a_materialType) {}
+	: color(a_color), pos(a_center), materialType(a_materialType) {} 
 
 Object::~Object() {}
 
@@ -37,6 +37,7 @@ Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c,
 	t_b = a_t_b;
 	t_c = a_t_c;
 
+	// Triangle has texture coordinates - calculate its tangent and bitangent
 	tangent, bitangent;
 	Vec3f edge1 = b - a;
 	Vec3f edge2 = c - a;
@@ -63,7 +64,6 @@ bool Triangle::rayTriangleIntersect(const Ray& ray, const Triangle* triPtr,
 	const Vec3f& v0 = triPtr->a;
 	const Vec3f& v1 = triPtr->b;
 	const Vec3f& v2 = triPtr->c;
-	// Vec3f N = (v1 - v0).crossProduct(v2 - v0); // normal
 
 	float u, v;
 	Vec3f v0v1 = v1 - v0;
@@ -120,11 +120,14 @@ bool Mesh::intersectMesh(const Ray& ray, float& t0, const Triangle*& triPtr,
 void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv,
 	Vec3f& hitNormal, Vec2f& texCoord) const
 {
+	// Get texture coordinate and normal from barycentric coordinates
 	texCoord = triPtr->t_b * uv.x + triPtr->t_c * uv.y + (1 - uv.x - uv.y) * triPtr->t_a;
 	//hitNormal = (triPtr->b - triPtr->a).crossProduct(triPtr->c - triPtr->a).normalize(); // flat triangle normal
 	hitNormal = ((triPtr->n_b * uv.x + triPtr->n_c * uv.y + triPtr->n_a * (1 - uv.x - uv.y)) / 3).normalize();
 
 	if (normalMapLoaded) {
+		// If we have normal map we have to use tangent and 
+		// face normal to calculate modified normal
 		const Vec3f& tangent = triPtr->tangent;
 		const Vec3f& bitangent = triPtr->bitangent;
 
@@ -136,11 +139,11 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, c
 			0,				0,				0,				0
 		};
 
+		// Get target normal from map
 		int width = normalMapWidth * texCoord.x;
 		int height = normalMapHeight * texCoord.y;
 		if (width >= normalMapWidth) width = normalMapWidth - 1;
 		if (height >= normalMapHeight) height = normalMapHeight - 1;
-
 		Vec3f tangentNormal = normalMap[height * normalMapWidth + width].normalize();
 		hitNormal = normalTransformer.multVecMatrix(tangentNormal).normalize();
 	}
@@ -172,6 +175,7 @@ float Mesh::getSpecularValue(const Vec2f& hitTexCoordinates) const
 
 bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 {
+	// Transformation matrix for rotation
 	const float& x = degToRad(rot.x);
 	Matrix44f mx(
 		1, 0, 0, 0,
@@ -198,7 +202,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 
 	const Matrix44f rMatrix = mz * my * mx;
 
-	// fast unsigned int read
+	// Fast unsigned int read
 	auto getUInt = [](const char*& ptr)
 	{
 		size_t val = 0;
@@ -228,13 +232,13 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 	}
 
 	do {
-		// read line and drop commented part
+		// Read line and drop commented part
 		std::getline(ifs, line);
 
 		if (line.find('#') != std::string::npos) line.erase(line.find('#'));
 		if (line.length() <= 0) continue;
 
-		// separate line header
+		// Separate line header
 		const char* c_line = line.c_str();
 		char lineHeader[32] = { 0 };
 		int res = sscanf_s(c_line, "%s", lineHeader, 32u);
@@ -244,7 +248,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 		c_line += strlen(lineHeader) + 1;
 
 		if (strcmp(lineHeader, "v") == 0) {
-			// read vertex
+			// Read vertex
 			float x, y, z;
 			int res = sscanf(c_line, "%f %f %f", &x, &y, &z);
 			if (res != 3) LOG_ERROR
@@ -254,28 +258,28 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 			vertexData.emplace_back(Vec3f(x, y, z));
 		}
 		else if (strcmp(lineHeader, "vn") == 0) {
-			// read normal
+			// Read normal
 			float x, y, z;
 			int res = sscanf_s(c_line, "%f %f %f", &x, &y, &z);
 			if (res != 3) LOG_ERROR
 			normalData.emplace_back(Vec3f{ x, y, z }.normalize());
 		}
 		else if (strcmp(lineHeader, "vt") == 0) {
-			// read uv
+			// Read texture
 			float x, y;
 			int res = sscanf_s(c_line, "%f %f", &x, &y);
 			if (res != 2) LOG_ERROR
 				textureData.emplace_back(Vec2f{ x, y });
 		}
 		else if (strcmp(lineHeader, "f") == 0) {
-			// read face
+			// Read face
 			if (!normalized) {
-				// normalize all vertices
+				// Normalize all vertices
 				normalized = true;
 				Vec3f range = max - min;
 				Vec3f normSize = size;
 				if (!(range.x < options.bias || range.y < options.bias || range.z < options.bias)) {
-
+					// Get normalized size
 					Vec3f stretch = size / range;
 					float minStretch = std::min(stretch.x, std::min(stretch.y, stretch.z));
 					if (minStretch == stretch.x) {
@@ -292,6 +296,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 					}
 				}
 
+				// Normalize all rotate all vertices
 				for (auto& v : vertexData) {
 					v.x = normSize.x * ((v.x - min.x) / range.x - 0.5f);
 					v.y = normSize.y * ((v.y - min.y) / range.y - 0.5f);
@@ -308,17 +313,18 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 					if (range.z < options.bias) v.z = pos.z;
 				}
 
+				// Rotate normals
 				for (auto& n : normalData) {
 					n = rMatrix.multVecMatrix(n);
 				}
 
+				// Set size for AC
 				normSize = rMatrix.multVecMatrix(normSize);
 				normSize = Vec3f{ fabs(normSize.x), fabs(normSize.y), fabs(normSize.z) };
-
 				ac->setBounds(pos - normSize / 2, pos + normSize / 2);
 			}
 
-			// add face
+			// Add face 
 			int slashCount = 0;
 			const char* ptr = c_line;
 			while (*ptr) if (*ptr++ == '/') slashCount++;
@@ -359,15 +365,18 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 				}
 			}
 			else {
-				std::cout << "unhandled slash count: " << slashCount << '\n';
+				std::cout << "Unhandled slash count: " << slashCount << '\n';
 			}
 		}
 	} while (ifs.good());
 	ifs.close();
 
+	// Move tris pointers to mesh
 	allTris.reserve(tris.size());
 	for (const Triangle* tri : tris)
 		allTris.push_back(tri);
+
+	// Setup AC
 	ac->setup(tris, 1, options);
 	if (options::collectStatistics) {
 		stats::meshCount.store(stats::meshCount.load() + allTris.size());
@@ -398,33 +407,6 @@ bool Mesh::loadDiffuseMap(const std::string& filename)
 
 bool Mesh::loadNormalMap(const std::string& filename)
 {
-	const float& x = degToRad(rot.x);
-	Matrix44f mx(
-		1, 0, 0, 0,
-		0, cosf(x), -sinf(x), 0,
-		0, sinf(x), cosf(x), 0,
-		0, 0, 0, 1
-	);
-
-	const float& y = degToRad(rot.y);
-	Matrix44f my(
-		cosf(y), 0, sinf(y), 0,
-		0, 1, 0, 0,
-		-sinf(y), 0, cosf(y), 0,
-		0, 0, 0, 1
-	);
-
-	const float& z = degToRad(rot.z);
-	Matrix44f mz(
-		cosf(z), -sinf(z), 0, 0,
-		sinf(z), cosf(z), 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1
-	);
-
-	const Matrix44f rMatrix = mz * my * mx;
-
-
 	if (!options::useTextures)
 		return false;
 	normalMapWidth = normalMapHeight = 0;
@@ -438,9 +420,8 @@ bool Mesh::loadNormalMap(const std::string& filename)
 	{
 		float x = data[i * 3], y = data[i * 3 + 1], z = data[i * 3 + 2];
 		x /= 256; y /= 256; z /= 256;
-		//normalMap[i] = rMatrix.multVecMatrix(Vec3f{ x, -y, z }.normalize());
+		// We have to transfer x and y from [0, 1] to [-1, 1], and reverse y
 		normalMap[i] = Vec3f{ x * 2 - 1, -(y * 2 - 1), z }.normalize();
-		//std::cout << Vec3f{ x, y, z }.length() << '\n';
 	}
 
 	return true;
@@ -483,6 +464,7 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 		tris = a_tris;
 	}
 
+	// Stop going deeper when it is not worth the depth
 	if (a_tris.size() <= a_depth * (size_t)options.acPenalty) {
 		if (options::collectStatistics) {
 			stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
@@ -493,14 +475,17 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 
 	int orientation; // xyz orientation
 	Vec3f dim = bounds[1] - bounds[0];
+	// Split along the longest edge
 	if (dim.x > dim.y && dim.x > dim.z) orientation = 0;
 	else if (dim.y > dim.z) orientation = 1;
 	else orientation = 2;
 	std::vector<const Triangle*> trisLeft;
 	std::vector<const Triangle*> trisRight;
 
+	// Get optimal split distance
 	float splitDist = getOptimalSplit(a_tris, orientation, bounds, trisLeft, trisRight);
 
+	// Stop split if too many triangles will be duplicated
 	if ((trisLeft.size() == 0 || trisRight.size() == 0) || (trisLeft.size() + trisRight.size() >= a_tris.size() * 1.5)) {
 		if (options::collectStatistics) {
 			stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
@@ -512,6 +497,7 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 	left = std::make_unique<AccelerationStructure>();
 	right = std::make_unique<AccelerationStructure>();
 
+	// Set bounds of ancestors
 	if (orientation == 0) {
 		left->setBounds(bounds[0], Vec3f{ splitDist, bounds[1].y, bounds[1].z });
 		right->setBounds(Vec3f{ splitDist, bounds[0].y, bounds[0].z }, bounds[1]);
@@ -525,6 +511,7 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 		right->setBounds(Vec3f{ bounds[0].x, bounds[0].y, splitDist }, bounds[1]);
 	}
 
+	// Setup ancestors
 	right->setup(trisRight, a_depth + 1, options);
 	left->setup(trisLeft, a_depth + 1, options);
 }
@@ -543,6 +530,7 @@ bool AccelerationStructure::intersectBox(const Ray& ray) const
 	if (options::collectStatistics) {
 		stats::accelStructTests.store(stats::accelStructTests.load() + 1);
 	}
+	// Check ray box intersection
 	const Vec3f invdir = 1 / ray.dir;
 	const int sign[3] = { (invdir.x < 0), (invdir.y < 0), (invdir.z < 0) };
 
@@ -593,11 +581,14 @@ bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 	if (!this->intersectBox(ray))
 		return false;
 
+	
 	bool inter = false;
 	float tempT;
 	Vec2f tempUV;
 	const Triangle* tempTriPtr;
 	t0 = std::numeric_limits<float>::max();
+	
+	// Check ancestors
 	if (left) {
 		if (!right) LOG_ERROR
 		if (left->intersectAccelStruct(ray, tempT, tempTriPtr, tempUV) && tempT < t0) {
@@ -617,6 +608,7 @@ bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 		return inter;
 	}
 
+	// If don't have ancestors, check all triangles
 	for (const Triangle* tri : tris) {
 		if (Triangle::rayTriangleIntersect(ray, tri, tempT, tempUV) && tempT < t0) {
 			inter = true;
@@ -631,6 +623,7 @@ bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 float AccelerationStructure::calculateSAH(const int orientation, const std::vector<const Triangle*>& tris,
 	const Vec3f bounds[2], const float boundary)
 {
+	// Calculate Surface Area Heuristic
 	float sah = 0.0f;
 	int triLeft = 0;
 	int triRight = 0;
@@ -670,6 +663,7 @@ float AccelerationStructure::calculateSAH(const int orientation, const std::vect
 float AccelerationStructure::binarySearchSAH(const int orientation, const std::vector<const Triangle*>& tris,
 	const Vec3f bounds[2], const float left, const float right)
 {
+	// If interval is lover then 0.1 - stop 
 	float mid = right - (right - left) / 2;
 	if (right - left < 0.1f) return mid;
 	if (calculateSAH(orientation, tris, bounds, mid - 0.05f)
@@ -686,7 +680,7 @@ float AccelerationStructure::getOptimalSplit(const std::vector<const Triangle*>&
 {
 	float splitDist = 0.0f;
 #if 0
-	// divide by equal parts
+	// Divide by equal parts
 	if (orientation == 0) {
 		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).x;
 	}
@@ -697,7 +691,7 @@ float AccelerationStructure::getOptimalSplit(const std::vector<const Triangle*>&
 		splitDist = (bounds[0] + (bounds[1] - bounds[0]) / 2).z;
 	}
 #elif 1
-	// Surface Area Heuristic (SAH)
+	// SAH
 	if (orientation == 0) {
 		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].x, bounds[1].x);
 	}
@@ -708,7 +702,7 @@ float AccelerationStructure::getOptimalSplit(const std::vector<const Triangle*>&
 		splitDist = binarySearchSAH(orientation, tris, bounds, bounds[0].z, bounds[1].z);
 	}
 #else
-	// divide by average
+	// Divide by average
 	if (orientation == 0) {
 		for (const Triangle* const tri : tris)
 			splitDist += tri->a.x + tri->b.x + tri->c.x;
@@ -726,7 +720,7 @@ float AccelerationStructure::getOptimalSplit(const std::vector<const Triangle*>&
 	}
 #endif
 
-	// split between left and right (some tris will be dublicated)
+	// Split between left and right (some tris will be duplicated)
 	if (orientation == 0) {
 		for (const Triangle* const tri : tris) {
 			if (tri->a.x <= splitDist || tri->b.x <= splitDist || tri->c.x <= splitDist)

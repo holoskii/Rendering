@@ -37,6 +37,15 @@ inline float radToDeg(const float& f)
 	return f * (180.0f / (float)(M_PI));
 }
 
+inline bool strToBool(const std::string_view& str)
+{
+	bool result = 0;
+	std::stringstream ss{ std::string(str) };
+	ss >> result;
+	if (!ss.eof() && !ss.good()) LOG_ERROR
+		return result;
+}
+
 inline int strToInt(const std::string_view& str)
 {
 	int result = 0;
