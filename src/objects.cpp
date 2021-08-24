@@ -19,14 +19,40 @@ Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c)
 	n_a = n_b = n_c = (a_b - a_a).crossProduct(a_c - a_a);
 }
 
-Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, const Vec3f& a_n_a,
-	const Vec3f& a_n_b, const Vec3f& a_n_c)
+Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, 
+	const Vec3f& a_n_a, const Vec3f& a_n_b, const Vec3f& a_n_c)
 	: Triangle(a_a, a_b, a_c)
 {
 	n_a = a_n_a;
 	n_b = a_n_b;
 	n_c = a_n_c;
 }
+
+Triangle::Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c,
+	const Vec3f& a_n_a, const Vec3f& a_n_b, const Vec3f& a_n_c,
+	const Vec2f& a_t_a, const Vec2f& a_t_b, const Vec2f& a_t_c)
+	: Triangle(a_a, a_b, a_c, a_n_a, a_n_b, a_n_c)
+{
+	t_a = a_t_a;
+	t_b = a_t_b;
+	t_c = a_t_c;
+
+	tangent, bitangent;
+	Vec3f edge1 = b - a;
+	Vec3f edge2 = c - a;
+	Vec2f deltaUV1 = t_b - t_a;
+	Vec2f deltaUV2 = t_c - t_a;
+
+	float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+	tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+	tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+	tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+
+	bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+	bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+	bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+}
+
 
 bool Triangle::rayTriangleIntersect(const Ray& ray, const Triangle* triPtr,
 	float& t, Vec2f& uv)
@@ -92,16 +118,56 @@ bool Mesh::intersectMesh(const Ray& ray, float& t0, const Triangle*& triPtr,
 }
 
 void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, const Vec2f& uv,
-	Vec3f& hitNormal, Vec2f& tex) const
+	Vec3f& hitNormal, Vec2f& texCoord) const
 {
-#if 1
-	// vertex normal shading
+	texCoord = triPtr->t_b * uv.x + triPtr->t_c * uv.y + (1 - uv.x - uv.y) * triPtr->t_a;
+	//hitNormal = (triPtr->b - triPtr->a).crossProduct(triPtr->c - triPtr->a).normalize(); // flat triangle normal
 	hitNormal = ((triPtr->n_b * uv.x + triPtr->n_c * uv.y + triPtr->n_a * (1 - uv.x - uv.y)) / 3).normalize();
-#else
-	// face normal shading
-	hitNormal = (triPtr->b - triPtr->a).crossProduct(triPtr->c - triPtr->a).normalize();
-#endif
-	tex = Vec2f{ uv.x, uv.y };
+
+	if (normalMapLoaded) {
+		const Vec3f& tangent = triPtr->tangent;
+		const Vec3f& bitangent = triPtr->bitangent;
+
+		const Matrix44f normalTransformer =
+		{
+			tangent[0],		tangent[1],		tangent[2],		0,
+			bitangent[0],	bitangent[1],	bitangent[2],	0,
+			hitNormal[0],	hitNormal[1],	hitNormal[2],	0,
+			0,				0,				0,				0
+		};
+
+		int width = normalMapWidth * texCoord.x;
+		int height = normalMapHeight * texCoord.y;
+		if (width >= normalMapWidth) width = normalMapWidth - 1;
+		if (height >= normalMapHeight) height = normalMapHeight - 1;
+
+		Vec3f tangentNormal = normalMap[height * normalMapWidth + width].normalize();
+		hitNormal = normalTransformer.multVecMatrix(tangentNormal).normalize();
+	}
+}
+
+Vec3f Mesh::getDiffuseColor(const Vec2f& hitTexCoordinates) const
+{
+	if (diffuseMapLoaded) {
+		int width = diffuseMapWidth * hitTexCoordinates.x;
+		int height = diffuseMapHeight * hitTexCoordinates.y;
+		if (width >= diffuseMapWidth) width = diffuseMapWidth - 1;
+		if (height >= diffuseMapHeight) height = diffuseMapHeight - 1;
+		return diffuseMap[height * diffuseMapWidth + width];
+	}
+	return color;
+}
+
+float Mesh::getSpecularValue(const Vec2f& hitTexCoordinates) const
+{
+	if (specularMapLoaded) {
+		int width = specularMapWidth * hitTexCoordinates.x;
+		int height = specularMapHeight * hitTexCoordinates.y;
+		if (width >= specularMapWidth) width = specularMapWidth - 1;
+		if (height >= specularMapHeight) height = specularMapHeight - 1;
+		return specularMap[height * specularMapWidth + width];
+	}
+	return specular;
 }
 
 bool Mesh::loadOBJ(const std::string& filename, const Options& options)
@@ -130,7 +196,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 		0, 0, 0, 1
 	);
 
-	Matrix44f rMatrix = mz * my * mx;
+	const Matrix44f rMatrix = mz * my * mx;
 
 	// fast unsigned int read
 	auto getUInt = [](const char*& ptr)
@@ -152,6 +218,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 	bool normalized = false;
 	std::vector<Vec3f> vertexData;
 	std::vector<Vec3f> normalData;
+	std::vector<Vec2f> textureData;
 	std::vector<const Triangle*> tris;
 	Vec3f min = { std::numeric_limits<float>::max() };
 	Vec3f max = { std::numeric_limits<float>::min() };
@@ -193,6 +260,13 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 			if (res != 3) LOG_ERROR
 			normalData.emplace_back(Vec3f{ x, y, z }.normalize());
 		}
+		else if (strcmp(lineHeader, "vt") == 0) {
+			// read uv
+			float x, y;
+			int res = sscanf_s(c_line, "%f %f", &x, &y);
+			if (res != 2) LOG_ERROR
+				textureData.emplace_back(Vec2f{ x, y });
+		}
 		else if (strcmp(lineHeader, "f") == 0) {
 			// read face
 			if (!normalized) {
@@ -203,12 +277,12 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 				if (!(range.x < options.bias || range.y < options.bias || range.z < options.bias)) {
 
 					Vec3f stretch = size / range;
-					float maxStretch = std::max(stretch.x, std::max(stretch.y, stretch.z));
-					if (maxStretch == stretch.x) {
+					float minStretch = std::min(stretch.x, std::min(stretch.y, stretch.z));
+					if (minStretch == stretch.x) {
 						normSize.y = normSize.x / (range.x / range.y);
 						normSize.z = normSize.x / (range.x / range.z);
 					}
-					else if (maxStretch == stretch.y) {
+					else if (minStretch == stretch.y) {
 						normSize.x = normSize.y / (range.y / range.x);
 						normSize.z = normSize.y / (range.y / range.z);
 					}
@@ -237,6 +311,9 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 				for (auto& n : normalData) {
 					n = rMatrix.multVecMatrix(n);
 				}
+
+				normSize = rMatrix.multVecMatrix(normSize);
+				normSize = Vec3f{ fabs(normSize.x), fabs(normSize.y), fabs(normSize.z) };
 
 				ac->setBounds(pos - normSize / 2, pos + normSize / 2);
 			}
@@ -272,8 +349,13 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 				else {
 					if (ni.size() != vi.size()) LOG_ERROR
 					for (size_t i = 1; i < vi.size() - 1; i++)
-						tris.push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
-							normalData.at(ni.at(0) - 1), normalData.at(ni.at(i) - 1), normalData.at(ni.at(i + 1) - 1)));
+						tris.push_back(
+							new Triangle(
+								vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
+								normalData.at(ni.at(0) - 1), normalData.at(ni.at(i) - 1), normalData.at(ni.at(i + 1) - 1),
+								textureData.at(ti.at(0) - 1), textureData.at(ti.at(i) - 1), textureData.at(ti.at(i + 1) - 1)
+							)
+						);
 				}
 			}
 			else {
@@ -290,6 +372,98 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 	if (options::collectStatistics) {
 		stats::meshCount.store(stats::meshCount.load() + allTris.size());
 	}
+	return true;
+}
+
+bool Mesh::loadDiffuseMap(const std::string& filename)
+{
+	if (!options::useTextures)
+		return false;
+	diffuseMapWidth = diffuseMapHeight = 0;
+	unsigned char* data = loadBMP(filename.c_str(), diffuseMapWidth, diffuseMapHeight);
+	if (data == NULL)
+		return false;
+
+	diffuseMap = new Vec3f[diffuseMapWidth * (size_t)diffuseMapHeight];
+
+	for (int i = 0; i < diffuseMapHeight * diffuseMapWidth; i++)
+	{
+		float x = data[i * 3], y = data[i * 3 + 1], z = data[i * 3 + 2];
+		x /= 256; y /= 256; z /= 256;
+		diffuseMap[i] = Vec3f{ x, y, z };
+	}
+
+	return true;
+}
+
+bool Mesh::loadNormalMap(const std::string& filename)
+{
+	const float& x = degToRad(rot.x);
+	Matrix44f mx(
+		1, 0, 0, 0,
+		0, cosf(x), -sinf(x), 0,
+		0, sinf(x), cosf(x), 0,
+		0, 0, 0, 1
+	);
+
+	const float& y = degToRad(rot.y);
+	Matrix44f my(
+		cosf(y), 0, sinf(y), 0,
+		0, 1, 0, 0,
+		-sinf(y), 0, cosf(y), 0,
+		0, 0, 0, 1
+	);
+
+	const float& z = degToRad(rot.z);
+	Matrix44f mz(
+		cosf(z), -sinf(z), 0, 0,
+		sinf(z), cosf(z), 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	);
+
+	const Matrix44f rMatrix = mz * my * mx;
+
+
+	if (!options::useTextures)
+		return false;
+	normalMapWidth = normalMapHeight = 0;
+	unsigned char* data = loadBMP(filename.c_str(), normalMapWidth, normalMapHeight);
+	if (data == NULL)
+		return false;
+
+	normalMap = new Vec3f[normalMapWidth * (size_t)normalMapHeight];
+
+	for (int i = 0; i < normalMapHeight * normalMapWidth; i++)
+	{
+		float x = data[i * 3], y = data[i * 3 + 1], z = data[i * 3 + 2];
+		x /= 256; y /= 256; z /= 256;
+		//normalMap[i] = rMatrix.multVecMatrix(Vec3f{ x, -y, z }.normalize());
+		normalMap[i] = Vec3f{ x * 2 - 1, -(y * 2 - 1), z }.normalize();
+		//std::cout << Vec3f{ x, y, z }.length() << '\n';
+	}
+
+	return true;
+}
+
+bool Mesh::loadSpecularMap(const std::string& filename)
+{
+	if (!options::useTextures)
+		return false;
+	specularMapWidth = specularMapHeight = 0;
+	unsigned char* data = loadBMP(filename.c_str(), specularMapWidth, specularMapHeight);
+	if (data == NULL)
+		return false;
+
+	specularMap = new float[specularMapWidth * (size_t)specularMapHeight];
+
+	for (int i = 0; i < specularMapHeight * specularMapWidth; i++)
+	{
+		float x = data[i * 3], y = data[i * 3 + 1], z = data[i * 3 + 2];
+		x /= 256; y /= 256; z /= 256;
+		specularMap[i] = (x + y + z) / 3.0f;
+	}
+
 	return true;
 }
 

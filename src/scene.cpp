@@ -232,7 +232,7 @@ bool Scene::loadScene(const std::string& sceneName)
                 if (strEquals(res[0], "phong")) {
                     object->materialType = MaterialType::Phong;
                     object->ambient = strToFloat(res[1]);
-                    object->difuse = strToFloat(res[2]);
+                    object->diffuse = strToFloat(res[2]);
                     object->specular = strToFloat(res[3]);
                     object->nSpecular = strToFloat(res[4]);
                 }
@@ -261,6 +261,15 @@ bool Scene::loadScene(const std::string& sceneName)
                 else if (strEquals(key, "name")) {
                     mesh->loadOBJ(std::string(value), options);
                 }
+				else if (strEquals(key, "diffuse_map")) {
+					mesh->diffuseMapLoaded = mesh->loadDiffuseMap(std::string(value));
+				}
+				else if (strEquals(key, "normal_map")) {
+					mesh->normalMapLoaded = mesh->loadNormalMap(std::string(value));
+				}
+				else if (strEquals(key, "specular_map")) {
+					mesh->specularMapLoaded = mesh->loadSpecularMap(std::string(value));
+				}
             }
         }
     }
@@ -436,6 +445,32 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 
 long long Scene::render()
 {
+#if 0
+	int width = 0, height = 0;
+	unsigned char* data = loadBMP("D:\\dev\\CG\\RayTracing\\input\\objects\\shotgun_normal.bmp", 
+		width, height);
+	if (data == NULL)
+		return false;
+
+	Vec3f* texture = new Vec3f[width * (size_t)height];
+
+	for (int i = 0; i < height * width; i++)
+	{
+		float x = data[i * 3], y = data[i * 3 + 1], z = data[i * 3 + 2];
+		x /= 256; y /= 256; z /= 256;
+		float v = y * (z / 2 + 0.5f);
+		texture[i] = Vec3f{ x, y, z }.normalize();
+	}
+	
+	Options options;
+	options.height = height;
+	options.width = width;
+
+	saveImage(texture, options);
+
+	exit(1);
+
+#endif
 	if (!sceneLoadSuccess) return -1;
 	Timer t("Total time");
 	Vec3f* frameBuffer = new Vec3f[options.height * options.width];
@@ -597,11 +632,18 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 	}
 	IntersectInfo intrInfo;
 	if (trace(ray, scene.objects, scene.lights, intrInfo)) {
+		Vec3f objectColor = intrInfo.hitObject->color;
+
 		Vec2f hitTexCoordinates;
 		Vec3f hitNormal, hitColor = { 0 };
 		// get point coordinate and normal
 		Vec3f hitPoint = ray.orig + ray.dir * intrInfo.tNear;
 		intrInfo.hitObject->getSurfaceData(hitPoint, intrInfo.triPtr, intrInfo.uv, hitNormal, hitTexCoordinates);
+
+		// return hitNormal / 2.0f + Vec3f{0.5f}; // show normals
+
+		if (intrInfo.hitObject->objectType == ObjectType::Mesh)
+			objectColor = static_cast<const Mesh*>(intrInfo.hitObject)->getDiffuseColor(hitTexCoordinates);
 
 		Vec3f diffuseComponent = 0, specularComponent = 0;
 		IntersectInfo intrShadInfo;
@@ -634,7 +676,7 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 					diffuseComponent += diffuseSum / light->points.size() * lightIntensity;
 				}
 			}
-			hitColor = intrInfo.hitObject->color * diffuseComponent;
+			hitColor = objectColor * diffuseComponent;
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Phong) {
 			// for Phong object we will combine colors of object color, difuse and specular
@@ -675,7 +717,10 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 					specularComponent += std::pow(specularSum / light->points.size(), intrInfo.hitObject->nSpecular) * lightIntensity;
 				}
 			}
-			hitColor = intrInfo.hitObject->color * intrInfo.hitObject->ambient + diffuseComponent * intrInfo.hitObject->difuse + specularComponent * intrInfo.hitObject->specular;
+			float specularCoefficient = intrInfo.hitObject->specular;
+			if (intrInfo.hitObject->objectType == ObjectType::Mesh)
+				specularCoefficient = static_cast<const Mesh*>(intrInfo.hitObject)->getSpecularValue(hitTexCoordinates);
+			hitColor = objectColor * intrInfo.hitObject->ambient + diffuseComponent * intrInfo.hitObject->diffuse + specularComponent * specularCoefficient;
 		}
 		else if (intrInfo.hitObject->materialType == MaterialType::Reflective) {
 			// get info from reflected ray
@@ -683,6 +728,7 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 
 			hitColor = 0.8f * castRay(reflectedRay, scene, depth + 1);
 
+			// add light reflections
 			specularComponent = 0;
 			for (uint32_t i = 0; i < scene.lights.size(); ++i) {
 				if (scene.lights[i]->type != LightType::AreaLight) {
@@ -731,6 +777,38 @@ Vec3f Render::castRay(const Ray& ray, const Scene& scene, const int depth)
 			Vec3f reflectionRayOrig = outside ? hitPoint + biasVec : hitPoint - biasVec;    // add bias
 			Vec3f reflectionColor = castRay(Ray{ reflectionRayOrig, reflectionDirection }, scene, depth + 1);
 			hitColor += reflectionColor * kr;
+
+			// add light reflections
+			specularComponent = 0;
+			for (uint32_t i = 0; i < scene.lights.size(); ++i) {
+				if (scene.lights[i]->type != LightType::AreaLight) {
+					scene.lights[i]->illuminate(hitPoint, lightDir, lightIntensity, intrShadInfo.tNear);
+					bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir, RayType::ShadowRay }, scene.objects, scene.lights, intrShadInfo);
+					Vec3f reflectedRay = reflect(lightDir, hitNormal);
+					specularComponent += vis * lightIntensity * std::pow(std::max(0.f, reflectedRay.dotProduct(-ray.dir)), intrInfo.hitObject->nSpecular);
+				}
+				else {
+					// area light requires different routine
+					AreaLight* light = dynamic_cast<AreaLight*>(scene.lights[i].get());
+
+					light->setPoints();
+					float areaIntensity = 0;
+					lightIntensity = light->color * std::min(1.0f, (float)(light->intensity / (4 * M_PI * (hitPoint - light->pos).length2() / 1000)));
+
+					float specularSum = 0;
+					float diffuseSum = 0;
+					// add all light samples
+					for (const auto& p : light->points) {
+						lightDir = hitPoint - p;
+						intrShadInfo.tNear = lightDir.length();
+						bool vis = !trace(Ray{ hitPoint + hitNormal * scene.options.bias, -lightDir.normalize(), RayType::ShadowRay }, scene.objects, scene.lights, intrShadInfo);
+						Vec3f reflectedRay = reflect(lightDir, hitNormal);
+						specularSum += vis * std::max(0.f, reflectedRay.dotProduct(-ray.dir));
+					}
+					specularComponent += std::pow(specularSum / light->points.size(), intrInfo.hitObject->nSpecular) * lightIntensity;
+				}
+			}
+			hitColor += specularComponent * kr;
 		}
 		
 		return hitColor;

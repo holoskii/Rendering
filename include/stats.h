@@ -34,11 +34,5 @@ namespace stats
 		std::cout << "Total triangle count:               " << std::setw(10) << meshCount.load() << '\n';
 		std::cout << "Acceleration structure count:       " << std::setw(10) << acCount.load() << '\n';
 		std::cout << "Rays casted:					      " << std::setw(10) << raysCasted.load() << '\n';
-
-		rayTriTests.store(0);
-		accelStructTests.store(0);
-		triCopiesCount.store(0);
-		meshCount.store(0);
-		acCount.store(0);
 	}
 }

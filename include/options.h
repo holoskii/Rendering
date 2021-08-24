@@ -30,11 +30,12 @@ namespace options
 	// global settings are stored here
 	// keeping them constexpr is better for performance
 	constexpr bool outputProgress			= 1;
-	constexpr bool useBackfaceCulling		= 0;
+	constexpr bool useBackfaceCulling		= 1;
 	constexpr bool collectStatistics		= 0;
 	constexpr bool enableOutput				= 1;
 	constexpr bool imageOutput				= 1;
 	constexpr bool useAC					= 1;
-	constexpr bool showAC					= 1;
+	constexpr bool showAC					= 0;
 	constexpr bool useSkybox				= 1;
+	constexpr bool useTextures				= 1;
 }

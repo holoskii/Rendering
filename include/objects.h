@@ -35,7 +35,7 @@ public:
 	ObjectType objectType = ObjectType::Object;
 	float indexOfRefraction = 1.4f; // used for Transparent only
 	float ambient = 0.1f;			// used for Phong only
-	float difuse = 0.1f;			// used for Phong only
+	float diffuse = 0.1f;			// used for Phong only
 	float specular = 1.0f;			// used for Phong only
 	float nSpecular = 5.0f;         // used for Phong only
 };
@@ -44,13 +44,18 @@ class Triangle
 {
 public:
 	Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c);
-	Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, const Vec3f& a_n_a,
-		const Vec3f& a_n_b, const Vec3f& a_n_c);
+	Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, 
+		const Vec3f& a_n_a, const Vec3f& a_n_b, const Vec3f& a_n_c);
+	Triangle(const Vec3f& a_a, const Vec3f& a_b, const Vec3f& a_c, 
+		const Vec3f& a_n_a, const Vec3f& a_n_b, const Vec3f& a_n_c,
+		const Vec2f& a_t_a, const Vec2f& a_t_b, const Vec2f& a_t_c);
 	static bool rayTriangleIntersect(const Ray& ray, const Triangle* triPtr,
 		float& t, Vec2f& uv);
 
 	Vec3f a, b, c;
 	Vec3f n_a, n_b, n_c;
+	Vec2f t_a, t_b, t_c;
+	Vec3f tangent, bitangent;
 };
 
 class Mesh : public Object
@@ -63,14 +68,34 @@ public:
 	bool intersectMesh(const Ray& ray, float& t0, const Triangle*& triPtr,
 		Vec2f& uv) const;
 	void getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr,
-		const Vec2f& uv, Vec3f& hitNormal, Vec2f& tex) const;
+		const Vec2f& uv, Vec3f& hitNormal, Vec2f& texCoord) const;
+	Vec3f getDiffuseColor(const Vec2f& hitTexCoordinates) const;
+	float getSpecularValue(const Vec2f& hitTexCoordinates) const;
 	bool loadOBJ(const std::string& filename, const Options& options);
+	bool loadDiffuseMap(const std::string& filename);
+	bool loadNormalMap(const std::string& filename);
+	bool loadSpecularMap(const std::string& filename);
 
 
 	Vec3f size;
 	Vec3f rot;
 	std::vector<const Triangle*> allTris;
 	std::unique_ptr<AccelerationStructure> ac;
+	
+	bool diffuseMapLoaded = false;
+	int diffuseMapWidth = 0;
+	int diffuseMapHeight = 0;
+	Vec3f* diffuseMap = nullptr;
+
+	bool normalMapLoaded = false;
+	int normalMapWidth = 0;
+	int normalMapHeight = 0;
+	Vec3f* normalMap = nullptr;
+
+	bool specularMapLoaded = false;
+	int specularMapWidth = 0;
+	int specularMapHeight = 0;
+	float* specularMap = nullptr;
 };
 
 class AccelerationStructure

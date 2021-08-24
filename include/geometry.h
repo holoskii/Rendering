@@ -22,6 +22,11 @@ public:
 		return Vec2(x + v.x, y + v.y);
 	}
 
+	Vec2 operator - (const Vec2& v) const
+	{
+		return Vec2(x - v.x, y - v.y);
+	}
+
 	Vec2 operator / (const T& r) const
 	{
 		return Vec2(x / r, y / r);
@@ -50,6 +55,16 @@ public:
 	friend Vec2 operator * (const T& r, const Vec2<T>& v)
 	{
 		return Vec2(v.x * r, v.y * r);
+	}
+
+	const T& operator [] (uint8_t i) const
+	{
+		return (&x)[i];
+	}
+
+	T& operator [] (uint8_t i)
+	{
+		return (&x)[i];
 	}
 
 	T x, y;

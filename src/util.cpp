@@ -44,7 +44,11 @@ unsigned char* loadBMP(const char* filename, int& width, int& height)
 {
     int i;
     FILE* f = fopen(filename, "rb");
-    if (f == NULL) LOG_ERROR
+    if (f == NULL) {
+        std::cout << "Could not open .bmp file: " << filename << '\n';
+        LOG_ERROR
+        return NULL;
+    }
     unsigned char info[54];
 
     // read the 54-byte header
