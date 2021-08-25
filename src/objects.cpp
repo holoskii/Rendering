@@ -2,6 +2,7 @@
 #include "objects.h"
 
 #include <fstream>
+#include <cstring>
 
 #include "timer.h"
 #include "util.h"
@@ -241,7 +242,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 		// Separate line header
 		const char* c_line = line.c_str();
 		char lineHeader[32] = { 0 };
-		int res = sscanf_s(c_line, "%s", lineHeader, 32u);
+		int res = sscanf(c_line, "%s", lineHeader);
 		if (res == 0) {
 			return false;
 		}
@@ -260,14 +261,14 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 		else if (strcmp(lineHeader, "vn") == 0) {
 			// Read normal
 			float x, y, z;
-			int res = sscanf_s(c_line, "%f %f %f", &x, &y, &z);
+			int res = sscanf(c_line, "%f %f %f", &x, &y, &z);
 			if (res != 3) LOG_ERROR
 			normalData.emplace_back(Vec3f{ x, y, z }.normalize());
 		}
 		else if (strcmp(lineHeader, "vt") == 0) {
 			// Read texture
 			float x, y;
-			int res = sscanf_s(c_line, "%f %f", &x, &y);
+			int res = sscanf(c_line, "%f %f", &x, &y);
 			if (res != 2) LOG_ERROR
 				textureData.emplace_back(Vec2f{ x, y });
 		}

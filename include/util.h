@@ -10,7 +10,7 @@
 #include "geometry.h"
 #include "options.h"
 
-#define LOG_ERROR logError(__FILE__, __FUNCSIG__, __LINE__);
+#define LOG_ERROR logError(__FILE__, __FUNCTION__, __LINE__);
 
 inline void logError(const char* file, const char* func, int line)
 {

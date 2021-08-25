@@ -1,9 +1,11 @@
 // classed describing scene and camera
 #include "scene.h"
 
+#include <algorithm>
 #include <thread>
 #include <map>
 #include <fstream>
+#include <cstring>
 
 #include "timer.h"
 #include "util.h"
@@ -137,8 +139,9 @@ bool Scene::loadScene(const std::string& scenePath)
         if (blockType == BlockType::Options) {
 			if (!strContains(str, "=")) LOG_ERROR
 			std::string key_s(str.c_str(), str.find('='));
-			key_s.erase(remove(key_s.begin(), key_s.end(), ' '), key_s.end());
-			key_s.erase(remove(key_s.begin(), key_s.end(), '\t'), key_s.end());
+			key_s.erase(std::remove(key_s.begin(), key_s.end(), ' '), key_s.end());
+			key_s.erase(std::remove(key_s.begin(), key_s.end(), '\t'), key_s.end());
+			
             std::string_view key(key_s);
             std::string_view value(str.c_str() + str.find('=') + 1);
 

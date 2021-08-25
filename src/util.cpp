@@ -8,6 +8,7 @@
 #endif // _WIN32
 
 #include <fstream>
+#include <cstring>
 
 #include "options.h"
 

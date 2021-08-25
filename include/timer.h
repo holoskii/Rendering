@@ -25,16 +25,16 @@ public:
 		if (!running)
 			return 0;
 		running = false;
+		auto stopTime = std::chrono::high_resolution_clock::now();
+		long long duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count();
 		if (options::enableOutput) {
-			auto stopTime = std::chrono::high_resolution_clock::now();
-			long long duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count();
 			std::cout << name << " \t" << duration << " ms" << std::endl;
-			return duration;
 		}
+		return duration;
 	}
 
 private:
 	std::string name;
-	std::chrono::steady_clock::time_point startTime;
+	std::chrono::system_clock::time_point startTime;
 	bool running;
 };
