@@ -50,7 +50,7 @@ public:
 	Vec3f rot;
 	Matrix44f rMatrix;
 
-	float fov = 90.0f;
+	float fov = 60.0f;
 	float zNear = 0.1f, zFar = 100.0f;
 
 	Camera(const Vec3f& a_pos = { 0, 0, 0 }, const Vec3f& a_rot = { 0, 0, 0 });

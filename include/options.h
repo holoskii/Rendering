@@ -30,7 +30,7 @@ namespace options
 	inline bool imageOutput				= 1;
 	inline bool useAC					= 1;
 	inline bool showAC					= 0;
-	inline bool useSkybox				= 1;
+	inline bool useSkybox				= 0;
 	inline bool useTextures				= 1;
 	inline bool showNormals				= 0;
 }

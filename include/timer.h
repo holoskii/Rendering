@@ -35,6 +35,6 @@ public:
 
 private:
 	std::string name;
-	std::chrono::system_clock::time_point startTime;
+	std::chrono::high_resolution_clock::time_point startTime;
 	bool running;
 };

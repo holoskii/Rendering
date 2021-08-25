@@ -21,31 +21,31 @@ int saveImage(Vec3f* frameBuffer, const Options& options)
         return -1;
     }
 
-    const int headerSize = 54;
+    const size_t headerSize = 54;
     char header[headerSize] = { 0 };
     int paddingBytes = options.width % 4 == 0 ? 0 : 4 - options.width * 3 % 4;
-    int arraySize = options.height * (options.width + paddingBytes) * 3;
-    int totalSize = headerSize + arraySize;
+    size_t arraySize = options.height * (options.width + paddingBytes) * 3;
+    size_t totalSize = headerSize + arraySize;
 
     
     memcpy(header, "BM", 2);
-    *(int*)(header + 0x2) = totalSize;
-    *(int*)(header + 0xA) = headerSize;
-    *(int*)(header + 0xE) = headerSize - 14;
-    *(int*)(header + 0x12) = options.width;
-    *(int*)(header + 0x16) = options.height;
+    *(size_t*)(header + 0x2) = totalSize;
+    *(size_t*)(header + 0xA) = headerSize;
+    *(size_t*)(header + 0xE) = headerSize - 14;
+    *(size_t*)(header + 0x12) = options.width;
+    *(size_t*)(header + 0x16) = options.height;
     *(header + 0x1A) = 1;
     *(header + 0x1C) = 24;
-    *(int*)(header + 0x22) = arraySize;
-    *(int*)(header + 0x26) = 2835;
-    *(int*)(header + 0x2A) = 2835;
+    *(size_t*)(header + 0x22) = arraySize;
+    *(size_t*)(header + 0x26) = 2835;
+    *(size_t*)(header + 0x2A) = 2835;
 
     // intermediate buffer significantly speeds up file write process
     char* data = new char[options.height * options.width * 3];
     char* dataPtr = data;
-    for (int i = options.height - 1; i >= 0; i--) {
-        for (int j = 0; j < options.width; j++) {
-            int v = i * options.width + j;
+    for (size_t i = 0; i < options.height; i++) {
+        for (size_t j = 0; j < options.width; j++) {
+            size_t v = (options.height - 1 - i) * options.width + j;
             for (int k = 2; k >= 0; k--) {
                 *dataPtr++ = static_cast<char>(clamp(0.0f, 1.0f, frameBuffer[v][k]) * 255);
             }

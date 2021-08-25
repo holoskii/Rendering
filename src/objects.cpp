@@ -216,8 +216,10 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 
 	Timer t("OBJ loading");
 	std::ifstream ifs(filename, std::ios::in);
-	if (!ifs.good()) return false;
-
+	if (!ifs.good()) {
+		std::cout << "Error, failed to load obj, filename: " << filename << '\n';
+		return false;
+	}
 	ac = std::make_unique<AccelerationStructure>();
 	std::string line;
 	bool normalized = false;
@@ -351,18 +353,21 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 				}
 				if (ni.size() == 0) {
 					for (size_t i = 1; i < vi.size() - 1; i++)
-						tris.push_back(new Triangle(vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
+						tris.push_back(new Triangle(
+							vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1)));
+				}
+				else if (ti.size() == 0) {
+					for (size_t i = 1; i < vi.size() - 1; i++)
+						tris.push_back(new Triangle(
+							vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
+							normalData.at(ni.at(0) - 1), normalData.at(ni.at(i) - 1), normalData.at(ni.at(i + 1) - 1)));
 				}
 				else {
-					if (ni.size() != vi.size()) LOG_ERROR
 					for (size_t i = 1; i < vi.size() - 1; i++)
-						tris.push_back(
-							new Triangle(
-								vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
-								normalData.at(ni.at(0) - 1), normalData.at(ni.at(i) - 1), normalData.at(ni.at(i + 1) - 1),
-								textureData.at(ti.at(0) - 1), textureData.at(ti.at(i) - 1), textureData.at(ti.at(i + 1) - 1)
-							)
-						);
+						tris.push_back(new Triangle(
+							vertexData.at(vi.at(0) - 1), vertexData.at(vi.at(i) - 1), vertexData.at(vi.at(i + 1) - 1),
+							normalData.at(ni.at(0) - 1), normalData.at(ni.at(i) - 1), normalData.at(ni.at(i + 1) - 1),
+							textureData.at(ti.at(0) - 1), textureData.at(ti.at(i) - 1), textureData.at(ti.at(i + 1) - 1)));
 				}
 			}
 			else {

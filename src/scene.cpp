@@ -192,6 +192,7 @@ bool Scene::loadScene(const std::string& scenePath)
 				for (int i = 0; i < 6; i++) {
 					strncpy(options.names[i], res[i].c_str(), 64);
 				}
+				options::useSkybox = 1;
 			}
 			else {
 				std::cout << "Scene, unknown key: " << key << '\n';
@@ -302,16 +303,16 @@ bool Scene::loadScene(const std::string& scenePath)
                     mesh->rot = str3ToFloat(splitString(value, ','));
                 }
                 else if (strEquals(key, "name")) {
-                    mesh->loadOBJ(std::string(value), options);
+                    mesh->loadOBJ(options.rootPath + "\\" + std::string(value), options);
                 }
 				else if (strEquals(key, "diffuse_map")) {
-					mesh->diffuseMapLoaded = mesh->loadDiffuseMap(std::string(value));
+					mesh->diffuseMapLoaded = mesh->loadDiffuseMap(options.rootPath + "\\" + std::string(value));
 				}
 				else if (strEquals(key, "normal_map")) {
-					mesh->normalMapLoaded = mesh->loadNormalMap(std::string(value));
+					mesh->normalMapLoaded = mesh->loadNormalMap(options.rootPath + "\\" + std::string(value));
 				}
 				else if (strEquals(key, "specular_map")) {
-					mesh->specularMapLoaded = mesh->loadSpecularMap(std::string(value));
+					mesh->specularMapLoaded = mesh->loadSpecularMap(options.rootPath + "\\" + std::string(value));
 				}
             }
         }

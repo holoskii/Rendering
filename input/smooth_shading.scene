@@ -1,0 +1,18 @@
+[options]
+width=1000
+height=1000
+fov=60
+n_workers=8
+max_depth=4
+image_name="files\smooth_shading.ppm"
+
+[light]
+R, point_light, 0.0,2.0,-1.0,	1,0,0,	0.3
+G, point_light, 1.0,-1.0,-1.0,	0,1,0,	0.9
+B, point_light, -1.0,-1.0,-1.0,	0,0,1,	0.9
+
+[object]
+plane_1,	plane,	0.0,-1.5,0.0,	0,1,0,	1,1,1,			none
+mesh_1,		mesh,	"files\objects\sphere.obj", 		0.0,0.0,-3.0,	2.0,2.0,2.0
+
+[end]
