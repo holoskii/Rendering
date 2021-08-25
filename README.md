@@ -59,7 +59,7 @@ Model above containes 250'000 triangles. Without usage of AC render time was 356
 Mesh consists of polygons (triangles), and if we will draw them as they are we will receive an image that doesn't look nice. To fix it, we may use shaders. The most basic one will smoothen the surface by extrapolating the normal triangle vertices.  
 | Flat shading | Vertex shading |
 |:----------------:|:----------------:|
-|![](output/basic_shader_off.bmpe)|![](output/basic_shader_on.bmp)|
+|![](output/basic_shader_off.bmp)|![](output/basic_shader_on.bmp)|
 
 ## Texture maps 
 The plain object is not very interesting and useful, so we can use texture maps to fix it. A texture map (sometimes called diffuse map) is an image storing information about objects' color. We can get them from texture coordinates, which are associated with each triangle. Also, those coordinates are normalized (from 0 to 1), therefore texture itself can have any size. The bigger the size - the better the quality.
