@@ -56,8 +56,22 @@ Scene::Scene(const std::string& sceneName)
 	sceneLoadSuccess = this->loadScene(sceneName);
 }
 
-bool Scene::loadScene(const std::string& sceneName)
+bool Scene::loadScene(const std::string& scenePath)
 {
+	if (options::enableOutput) {
+		std::cout << "Loading scene " << scenePath << '\n';
+	}
+
+	std::string rootPath = scenePath;
+	size_t loc = rootPath.find("input") - 1;
+	if (loc >= rootPath.length())
+		loc = rootPath.rfind("\\");
+	if (loc >= rootPath.length())
+		loc = 0;
+	
+	rootPath.erase(loc);
+	options.rootPath = rootPath;
+
     enum class BlockType { None, Options, Light, Object };
     std::map<std::string, BlockType> blockMap;
     blockMap["[options]"] = BlockType::Options;
@@ -66,12 +80,13 @@ bool Scene::loadScene(const std::string& sceneName)
     blockMap["[end]"] = BlockType::None;
     BlockType blockType = BlockType::None;
 
-    std::string scenePath = options.rootPath + "\\" + sceneName;
     std::string str;
     std::ifstream ifs(scenePath, std::ifstream::in);
 
-	if (!ifs.good()) LOG_ERROR
-
+	if (!ifs.good()) {
+		std::cout << "Could not open scene file: " << scenePath << '\n';
+		LOG_ERROR
+	}
     Light* light = nullptr;
     Object* object = nullptr;
 
@@ -304,12 +319,8 @@ bool Scene::loadScene(const std::string& sceneName)
 	if (options::useSkybox) {
 		loadSkybox();
 	}
-
-	if (options::enableOutput) {
-		std::cout << "Scene loaded " << sceneName << '\n';
-	}
-
-    return true;
+	
+	return true;
 }
 
 void Scene::loadSkybox()

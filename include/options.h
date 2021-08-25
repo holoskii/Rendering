@@ -14,8 +14,8 @@ public:
 	int nWorkers = 8;
 	Vec3f backgroundColor { 0.0f, 0.0f, 0.0f };
 	int acPenalty = 1;	// determines amount of acceleration structures
-	char names[6][64];	// skybox names
-	std::string rootPath = "D:\\dev\\CG\\RayTracing";
+	char names[6][64] = { { 0 } };	// skybox names
+	std::string rootPath = "";
 	std::string imageName = "out";
 };
 

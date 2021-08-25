@@ -140,8 +140,8 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, c
 		};
 
 		// Get target normal from map
-		int width = normalMapWidth * texCoord.x;
-		int height = normalMapHeight * texCoord.y;
+		int width = (int)(normalMapWidth * texCoord.x);
+		int height = (int)(normalMapHeight * texCoord.y);
 		if (width >= normalMapWidth) width = normalMapWidth - 1;
 		if (height >= normalMapHeight) height = normalMapHeight - 1;
 		Vec3f tangentNormal = normalMap[height * normalMapWidth + width].normalize();
@@ -152,8 +152,8 @@ void Mesh::getSurfaceData(const Vec3f& hitPoint, const Triangle* const triPtr, c
 Vec3f Mesh::getDiffuseColor(const Vec2f& hitTexCoordinates) const
 {
 	if (diffuseMapLoaded) {
-		int width = diffuseMapWidth * hitTexCoordinates.x;
-		int height = diffuseMapHeight * hitTexCoordinates.y;
+		int width = (int)(diffuseMapWidth * hitTexCoordinates.x);
+		int height = (int)(diffuseMapHeight * hitTexCoordinates.y);
 		if (width >= diffuseMapWidth) width = diffuseMapWidth - 1;
 		if (height >= diffuseMapHeight) height = diffuseMapHeight - 1;
 		return diffuseMap[height * diffuseMapWidth + width];
@@ -164,8 +164,8 @@ Vec3f Mesh::getDiffuseColor(const Vec2f& hitTexCoordinates) const
 float Mesh::getSpecularValue(const Vec2f& hitTexCoordinates) const
 {
 	if (specularMapLoaded) {
-		int width = specularMapWidth * hitTexCoordinates.x;
-		int height = specularMapHeight * hitTexCoordinates.y;
+		int width = (int)(specularMapWidth * hitTexCoordinates.x);
+		int height = (int)(specularMapHeight * hitTexCoordinates.y);
 		if (width >= specularMapWidth) width = specularMapWidth - 1;
 		if (height >= specularMapHeight) height = specularMapHeight - 1;
 		return specularMap[height * specularMapWidth + width];
