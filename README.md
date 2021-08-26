@@ -11,13 +11,15 @@ As input, the program uses a scene file, where all properties are listed. Depend
 The output of the program is a single bpm file, containing a rendered image of a given resolution. BMP image format was chosen because of its simplicity. 
 
 ## Scene loader
-In order to render something, we need information about scene. Those are stored in scene file. It has several blocks: 
+In order to render something, we need information about scene. Those are stored in scene file. It is a text file that has several blocks: 
 * Options :Here all types of settings are store as a pair of <key>=<value>. In the key field additional spaces and tabs may be inserted (they will be trimmed), but not on the side of value. You can see the full list in file full_scene.scene in the input folder 
 * Object/Light: Each light or object block represents a single entity in the scene. Each line in this block will describe this entity. 
 * End block: The scene file ends with an end block to indicate that all data has been read. 
 
 ## Features
-
+### Multithreading
+Ray tracing process for each pixel is a task that can be easily paralleled, so the program can use a custom amount of C++ threads to boost performance.
+  
 ### Basic shapes
 The simplest scene that can be rendered is a scene consisting of base shapes, like Sphere and Plane, and Point or Distant light sources. Here is an example of such a scene: 
 
