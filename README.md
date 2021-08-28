@@ -2,7 +2,10 @@
 This is a software raytracing engine, fully written in C++17, with no dependencies or external libraries used. It uses backward cast raytracing, therefore keeping the balance between features of raytracing like correct reflections and refractions and avoiding the low performance of the Monte-Carlo method.
 
 ### How to launch it
-If you are using MSVS, you can launch it from the project file. If not, you can compile all files in src and include folders, no additional libraries are needed. The project folder consists of a folder with code files, input and output folders. 
+If you are using MSVS, you can launch it from the project file. Alternatively, you can build it with CMake  
+> cmake -H. -Bbuild  
+> cmake --build build  
+> ./bin/RayTracing <path-to-scene-file>  
 
 ### Input
 As input, the program uses a scene file, where all properties are listed. Depending on the scene, object files, textures, and skyboxes might also be loaded. Scene path can be passed as an argument value at program start. 
