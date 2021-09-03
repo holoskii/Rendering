@@ -6,7 +6,7 @@ background_color=0.5,0.5,0.5
 position=0,1,-1
 rotation=20,0,0
 useBackfaceCulling=0
-image_name=output\area_low_res
+image_name=output/area_low_res
 #######################################################
 
 [light]
@@ -26,7 +26,7 @@ pos=0,0,-4.5
 size=2,2,2
 color=1,1,1
 rot=0,0,0
-name=input\objects\bunny_n.obj
+name=input/objects/bunny_n.obj
 
 [object]
 type=plane

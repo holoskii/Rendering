@@ -2,7 +2,7 @@
 useBackfaceCulling=0
 width=1920
 height=1080
-image_name=output\backface_culling_off
+image_name=output/backface_culling_off
 background_color=0.52,0.8,0.92
 #######################################################
 
@@ -21,7 +21,7 @@ size=2,2,2
 color=1,1,1
 rot=0,0,0
 material=diffuse
-name=input\objects\bunny.obj
+name=input/objects/bunny.obj
 
 [object]
 type=mesh
@@ -29,6 +29,6 @@ pos=0,-2,0
 size=32,32,32
 color=0.5,0.6,0.7
 rot=0,0,0
-name=input\objects\floor.obj
+name=input/objects/floor.obj
 
 [end]

@@ -8,7 +8,7 @@ int main(int argc, char** argv)
 	if (argc > 1)
 		scenePath = argv[1];
 	else {
-		scenePath = std::string("D:\\dev\\CG\\RayTracing\\input\\shotgun.scene");
+		scenePath = std::string("input/shotgun.scene");
 	}
 	Scene(scenePath).render();
 }
