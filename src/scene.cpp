@@ -295,16 +295,16 @@ bool Scene::loadScene(const std::string& scenePath)
                     mesh->rot = str3ToFloat(splitString(value, ','));
                 }
                 else if (strEquals(key, "name")) {
-                    mesh->loadOBJ(options.rootPath / std::string(value), options);
+                    mesh->loadOBJ((options.rootPath / std::string(value)).string(), options);
                 }
 				else if (strEquals(key, "diffuse_map")) {
-					mesh->diffuseMapLoaded = mesh->loadDiffuseMap(options.rootPath / std::string(value));
+					mesh->diffuseMapLoaded = mesh->loadDiffuseMap((options.rootPath / std::string(value)).string());
 				}
 				else if (strEquals(key, "normal_map")) {
-					mesh->normalMapLoaded = mesh->loadNormalMap(options.rootPath / std::string(value));
+					mesh->normalMapLoaded = mesh->loadNormalMap((options.rootPath / std::string(value)).string());
 				}
 				else if (strEquals(key, "specular_map")) {
-					mesh->specularMapLoaded = mesh->loadSpecularMap(options.rootPath / std::string(value));
+					mesh->specularMapLoaded = mesh->loadSpecularMap((options.rootPath / std::string(value)).string());
 				}
             }
         }
@@ -326,7 +326,7 @@ void Scene::loadSkybox()
 		unsigned char* u_skyboxes[6];
 		int width, height;
 		for (int i = 0; i < 6; i++) {
-			u_skyboxes[i] = loadBMP((options.rootPath / std::string(options.names[i])).c_str(), width, height);
+			u_skyboxes[i] = loadBMP((options.rootPath / std::string(options.names[i])).string().c_str(), width, height);
 		}
 		skyboxHeight = height;
 		skyboxWidth = width;
