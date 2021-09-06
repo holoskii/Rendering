@@ -60,7 +60,7 @@ bool Triangle::rayTriangleIntersect(const Ray& ray, const Triangle* triPtr,
 	float& t, Vec2f& uv)
 {
 	if (options::collectStatistics) {
-		stats::rayTriTests.store(stats::rayTriTests.load() + 1);
+		stats::rayTriTests++;
 	}
 	const Vec3f& v0 = triPtr->a;
 	const Vec3f& v1 = triPtr->b;
@@ -388,7 +388,7 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 	// Setup AC
 	ac->setup(tris, 1, options);
 	if (options::collectStatistics) {
-		stats::meshCount.store(stats::meshCount.load() + allTris.size());
+		stats::meshCount += allTris.size();
 	}
 	return true;
 }
@@ -461,7 +461,7 @@ bool Mesh::loadSpecularMap(const std::string& filename)
 AccelerationStructure::AccelerationStructure()
 {
 	if (options::collectStatistics) {
-		stats::acCount.store(stats::acCount.load() + 1);
+		stats::acCount++;
 	}
 }
 
@@ -476,7 +476,7 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 	// Stop going deeper when it is not worth the depth
 	if (a_tris.size() <= a_depth * (size_t)options.acPenalty) {
 		if (options::collectStatistics) {
-			stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
+			stats::triCopiesCount += a_tris.size();
 		}
 		tris = a_tris;
 		return;
@@ -497,7 +497,7 @@ void AccelerationStructure::setup(std::vector<const Triangle*>& a_tris, int a_de
 	// Stop split if too many triangles will be duplicated
 	if ((trisLeft.size() == 0 || trisRight.size() == 0) || (trisLeft.size() + trisRight.size() >= a_tris.size() * 1.5)) {
 		if (options::collectStatistics) {
-			stats::triCopiesCount.store(stats::triCopiesCount.load() + a_tris.size());
+			stats::triCopiesCount += a_tris.size();
 		}
 		tris = a_tris;
 		return;
@@ -537,7 +537,7 @@ bool AccelerationStructure::intersectBox(const Ray& ray) const
 		return true;
 	}
 	if (options::collectStatistics) {
-		stats::accelStructTests.store(stats::accelStructTests.load() + 1);
+		stats::accelStructTests++;
 	}
 	// Check ray box intersection
 	const Vec3f invdir = 1 / ray.dir;
@@ -587,7 +587,7 @@ int AccelerationStructure::recCountAC(const Ray& ray)
 bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 	const Triangle*& triPtr, Vec2f& uv) const
 {
-	if (!this->intersectBox(ray))
+	if (!intersectBox(ray))
 		return false;
 
 	

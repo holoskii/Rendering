@@ -75,8 +75,8 @@ public:
 	Vec3f* skyboxes[6] = { nullptr };
 
 	// Info for statistics
-	std::atomic<int> finishedPixels{ 0 };
-	std::atomic<int> finishedWorkers{ 0 };
+	std::atomic<int> finishedPixels = 0;
+	std::atomic<int> finishedWorkers = 0;
 
 	Scene(const std::string& sceneName);
 	bool loadScene(const std::string& sceneName);
@@ -85,7 +85,7 @@ public:
 
 	long long render();
 	int launchWorkers(Vec3f* frameBuffer);
-	void renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1);
+	void renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1, size_t x0, size_t x1);
 
 	int countAC(const Ray& ray);
 };

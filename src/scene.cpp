@@ -49,13 +49,13 @@ Ray Camera::getRay(const float xPix, const  float yPix)
 
 	// Rotate camera direction
 	Vec3f dir = rMatrix.multVecMatrix(Vec3f(xPix, yPix, -1).normalize());
-	return Ray{ this->pos , dir };
+	return Ray{ pos , dir };
 }
 
 
 Scene::Scene(const std::string& sceneName)
 {
-	sceneLoadSuccess = this->loadScene(sceneName);
+	sceneLoadSuccess = loadScene(sceneName);
 }
 
 bool Scene::loadScene(const std::string& scenePath)
@@ -417,60 +417,47 @@ Vec3f Scene::getSkybox(const Vec3f& dir) const
 	return options.backgroundColor;
 }
 
-void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
+void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1, size_t x0, size_t x1)
 {
-	// Render pixels in rows from y0 to y1
+	// Render pixels in tile from (x0, y0) to (x1, y1)
 	const float scale = tanf(camera.fov * 0.5f / 180.0f * (float)(M_PI));
 	const float imageAspectRatio = (options.width) / (float)options.height;
 	for (size_t y = y0; y < y1; y++) {
-		for (size_t x = 0; x < options.width; x++) {
-			/*if (x == 165 && y == 115) {
-				frameBuffer[x + y * options.width] = { 1,0,0 };
-				continue;
-			}*/
+		for (size_t x = x0; x < x1; x++) {
 			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
 			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
-			Ray ray = this->camera.getRay(xPix, yPix);
+			Ray ray = camera.getRay(xPix, yPix);
 			frameBuffer[x + y * options.width] = Render::castRay(ray, *this, 0);
-			finishedPixels.store(finishedPixels.load() + 1);
+			finishedPixels++;
 		}
 	}
-	finishedWorkers.store(finishedWorkers.load() + 1);
+	finishedWorkers++;
 }
 
 int Scene::launchWorkers(Vec3f* frameBuffer)
 {
 	Timer t("Render scene");
-
+	
 	// Create threads with equal load
-	std::vector<std::unique_ptr<std::thread>> threadPool;
+	std::vector<std::thread> threadPool;
 	for (size_t i = 0; i < options.nWorkers; i++) {
 		size_t y0 = options.height / options.nWorkers * i;
 		size_t y1 = options.height / options.nWorkers * (i + 1);
 		if (i + 1 == options.nWorkers) y1 = options.height;
-		threadPool.push_back(std::make_unique<std::thread>(&Scene::renderWorker, this, frameBuffer, y0, y1));
+		threadPool.push_back(std::thread(&Scene::renderWorker, this, frameBuffer, y0, y1, 0, options.width));
 	}
 
 	if (options::outputProgress) {
 		// Until all workers finish we will print progress
-		while (finishedWorkers.load() != options.nWorkers) {
-			auto start = std::chrono::high_resolution_clock::now();
-			for (int i = 0; i < 100; i++) {
-				if (finishedWorkers.load() == options.nWorkers)
-					break;
-				if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() >= 1000ll)
-					break;
-				std::this_thread::sleep_for(std::chrono::milliseconds(10));
-			}
-			if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() >= 1000ll) {
-				const float progressCoef = 100.0f / (options.width * options.height);
-				std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
-			}
+		while (finishedWorkers != options.nWorkers) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+			const float progressCoef = 100.0f / (options.width * options.height);
+			std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels << "%\n";
 		}
 	}
 
 	for (auto& thread : threadPool)
-		thread->join();
+		thread.join();
 
 	return 0;
 }
@@ -493,7 +480,7 @@ long long Scene::render()
 			for (size_t x = 0; x < options.width; x++) {
 				float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
 				float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
-				Ray ray = this->camera.getRay(xPix, yPix);
+				Ray ray = camera.getRay(xPix, yPix);
 				int val = countAC(ray);
 				if (val > acMax) acMax = val;
 				acBuffer[x + y * options.width] = val;
@@ -604,7 +591,7 @@ bool Render::trace(const Ray& ray, const ObjectVector& objects, IntersectInfo& i
 {
 	// Try to intersect all objects, choose the closest one
 	if (options::collectStatistics) {
-		stats::raysCasted.store(stats::raysCasted.load() + 1);
+		stats::raysCasted++;
 	}
 	intrInfo.hitObject = nullptr;
 	for (auto i = objects.begin(); i != objects.end(); i++) {

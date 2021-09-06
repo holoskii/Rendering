@@ -23,14 +23,14 @@ public:
 namespace options
 {
 	// global settings
-	inline bool outputProgress			= 1;
-	inline bool useBackfaceCulling		= 1;
-	inline bool collectStatistics		= 0;
-	inline bool enableOutput			= 1;
-	inline bool imageOutput				= 1;
-	inline bool useAC					= 1;
-	inline bool showAC					= 0;
-	inline bool useSkybox				= 0;
-	inline bool useTextures				= 1;
-	inline bool showNormals				= 0;
+	inline bool outputProgress			= true;
+	inline bool useBackfaceCulling		= true;
+	inline bool collectStatistics		= false;
+	inline bool enableOutput			= true;
+	inline bool imageOutput				= true;
+	inline bool useAC					= true;
+	inline bool showAC					= false;
+	inline bool useSkybox				= false;
+	inline bool useTextures				= true;
+	inline bool showNormals				= false;
 }
