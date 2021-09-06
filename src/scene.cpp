@@ -64,8 +64,6 @@ bool Scene::loadScene(const std::string& scenePath)
 		std::cout << "Loading scene " << scenePath << '\n';
 	}
 
-	options.rootPath = std::filesystem::path(scenePath).parent_path().parent_path();
-
     enum class BlockType { None, Options, Light, Object };
     std::map<std::string, BlockType> blockMap;
     blockMap["[options]"] = BlockType::Options;
@@ -79,7 +77,7 @@ bool Scene::loadScene(const std::string& scenePath)
 
 	if (!ifs.good()) {
 		std::cout << "Could not open scene file: " << scenePath << '\n';
-		LOG_ERROR
+		LOG_ERROR();
 	}
     Light* light = nullptr;
     Object* object = nullptr;
@@ -93,12 +91,12 @@ bool Scene::loadScene(const std::string& scenePath)
         if (strContains(str, "[")) {
             if (blockType == BlockType::Light) {
 				if (light == nullptr)
-					LOG_ERROR
+					LOG_ERROR();
                 lights.push_back(std::unique_ptr<Light>(light));
             }
             else if (blockType == BlockType::Object) {
 				if (object == nullptr)
-					LOG_ERROR
+					LOG_ERROR();
                 objects.push_back(std::unique_ptr<Object>(object));
             }
         }
@@ -120,7 +118,8 @@ bool Scene::loadScene(const std::string& scenePath)
 
         // Select block
         if (str[0] == '[') {
-			if (blockMap.find(str) == blockMap.end()) LOG_ERROR
+			if (blockMap.find(str) == blockMap.end()) 
+				LOG_ERROR();
             blockType = blockMap[str];
             if (blockType == BlockType::None)
                 break;
@@ -129,7 +128,8 @@ bool Scene::loadScene(const std::string& scenePath)
 
         // Parse the line
         if (blockType == BlockType::Options) {
-			if (!strContains(str, "=")) LOG_ERROR
+			if (!strContains(str, "=")) 
+				LOG_ERROR();
 			std::string key_s(str.c_str(), str.find('='));
 			key_s.erase(std::remove(key_s.begin(), key_s.end(), ' '), key_s.end());
 			key_s.erase(std::remove(key_s.begin(), key_s.end(), '\t'), key_s.end());
@@ -180,7 +180,8 @@ bool Scene::loadScene(const std::string& scenePath)
                 camera.rot = str3ToFloat(splitString(value, ','));
 			else if (strEquals(key, "skyboxes")) {
 				auto res = splitString(value, ',');
-				if (res.size() < 6) LOG_ERROR
+				if (res.size() < 6) 
+					LOG_ERROR();
 				for (int i = 0; i < 6; i++) {
 					strncpy(options.names[i], res[i].c_str(), 64);
 				}
@@ -191,7 +192,8 @@ bool Scene::loadScene(const std::string& scenePath)
 			}
         }
         else if (blockType == BlockType::Light) {
-			if (!strContains(str, "=")) LOG_ERROR
+			if (!strContains(str, "=")) 
+				LOG_ERROR();
             std::string_view key(str.c_str(), str.find('='));
             std::string_view value(str.c_str() + str.find('=') + 1);
 
@@ -210,32 +212,39 @@ bool Scene::loadScene(const std::string& scenePath)
             else if (strEquals(key, "intensity"))
                 light->intensity = strToFloat(value);
             if (strEquals(key, "direction")) {
-				if (light->type != LightType::DistantLight) LOG_ERROR
+				if (light->type != LightType::DistantLight) 
+					LOG_ERROR();
                 static_cast<DistantLight*>(light)->dir = str3ToFloat(splitString(value, ','));
             }
             else if (strEquals(key, "position")) {
-				if (light->type != LightType::PointLight) LOG_ERROR
+				if (light->type != LightType::PointLight) 
+					LOG_ERROR();
                 static_cast<PointLight*>(light)->pos = str3ToFloat(splitString(value, ','));
             }
 			else if (strEquals(key, "pos")) {
-				if (light->type != LightType::AreaLight) LOG_ERROR
+				if (light->type != LightType::AreaLight) 
+					LOG_ERROR();
 				static_cast<AreaLight*>(light)->pos = str3ToFloat(splitString(value, ','));
 			}
 			else if (strEquals(key, "i")) {
-				if (light->type != LightType::AreaLight) LOG_ERROR
+				if (light->type != LightType::AreaLight) 
+					LOG_ERROR();
 				static_cast<AreaLight*>(light)->i = str3ToFloat(splitString(value, ','));
 			}
 			else if (strEquals(key, "j")) {
-				if (light->type != LightType::AreaLight) LOG_ERROR
+				if (light->type != LightType::AreaLight) 
+					LOG_ERROR();
 				static_cast<AreaLight*>(light)->j = str3ToFloat(splitString(value, ','));
 			}
 			else if (strEquals(key, "samples")) {
-				if (light->type != LightType::AreaLight) LOG_ERROR
+				if (light->type != LightType::AreaLight) 
+					LOG_ERROR();
 				static_cast<AreaLight*>(light)->samples = strToInt(value);
 			}
         }
         else if (blockType == BlockType::Object) {
-           if (!strContains(str, "=")) LOG_ERROR
+           if (!strContains(str, "=")) 
+			   LOG_ERROR();
             std::string_view key(str.c_str(), str.find('='));
             std::string_view value(str.c_str() + str.find('=') + 1);
 
@@ -295,16 +304,16 @@ bool Scene::loadScene(const std::string& scenePath)
                     mesh->rot = str3ToFloat(splitString(value, ','));
                 }
                 else if (strEquals(key, "name")) {
-                    mesh->loadOBJ((options.rootPath / std::string(value)).string(), options);
+                    mesh->loadOBJ(std::string(value), options);
                 }
 				else if (strEquals(key, "diffuse_map")) {
-					mesh->diffuseMapLoaded = mesh->loadDiffuseMap((options.rootPath / std::string(value)).string());
+					mesh->diffuseMapLoaded = mesh->loadDiffuseMap(std::string(value));
 				}
 				else if (strEquals(key, "normal_map")) {
-					mesh->normalMapLoaded = mesh->loadNormalMap((options.rootPath / std::string(value)).string());
+					mesh->normalMapLoaded = mesh->loadNormalMap(std::string(value));
 				}
 				else if (strEquals(key, "specular_map")) {
-					mesh->specularMapLoaded = mesh->loadSpecularMap((options.rootPath / std::string(value)).string());
+					mesh->specularMapLoaded = mesh->loadSpecularMap(std::string(value));
 				}
             }
         }
@@ -326,7 +335,7 @@ void Scene::loadSkybox()
 		unsigned char* u_skyboxes[6];
 		int width, height;
 		for (int i = 0; i < 6; i++) {
-			u_skyboxes[i] = loadBMP((options.rootPath / std::string(options.names[i])).string().c_str(), width, height);
+			u_skyboxes[i] = loadBMP(options.names[i], width, height);
 		}
 		skyboxHeight = height;
 		skyboxWidth = width;
@@ -410,10 +419,6 @@ Vec3f Scene::getSkybox(const Vec3f& dir) const
 
 void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 {
-#ifdef _DEBUG
-	auto lastStat = std::chrono::high_resolution_clock::now();
-#endif // _DEBUG
-
 	// Render pixels in rows from y0 to y1
 	const float scale = tanf(camera.fov * 0.5f / 180.0f * (float)(M_PI));
 	const float imageAspectRatio = (options.width) / (float)options.height;
@@ -429,16 +434,6 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1)
 			frameBuffer[x + y * options.width] = Render::castRay(ray, *this, 0);
 			finishedPixels.store(finishedPixels.load() + 1);
 		}
-#ifdef _DEBUG
-		// In debug mode we only have one thread, so we need to check for progress updates manually
-		if (options::outputProgress) {
-			if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - lastStat).count() >= 1000ll) {
-				const float progressCoef = 100.0f / (options.width * options.height);
-				if (y % 10 == 0) std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels.load() << "%\n";
-				lastStat = std::chrono::high_resolution_clock::now();
-			}
-		}
-#endif // _DEBUG
 	}
 	finishedWorkers.store(finishedWorkers.load() + 1);
 }
@@ -447,10 +442,6 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 {
 	Timer t("Render scene");
 
-#ifdef _DEBUG
-	// In debug mode we do not create any additional threads
-	renderWorker(frameBuffer, 0, options.height);
-#else
 	// Create threads with equal load
 	std::vector<std::unique_ptr<std::thread>> threadPool;
 	for (size_t i = 0; i < options.nWorkers; i++) {
@@ -481,7 +472,6 @@ int Scene::launchWorkers(Vec3f* frameBuffer)
 	for (auto& thread : threadPool)
 		thread->join();
 
-#endif
 	return 0;
 }
 

@@ -254,7 +254,8 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 			// Read vertex
 			float x, y, z;
 			int res = sscanf(c_line, "%f %f %f", &x, &y, &z);
-			if (res != 3) LOG_ERROR
+			if (res != 3) 
+				LOG_ERROR();
 			min.x = std::min(x, min.x); min.y = std::min(y, min.y);
 			min.z = std::min(z, min.z); max.x = std::max(x, max.x);
 			max.y = std::max(y, max.y); max.z = std::max(z, max.z);
@@ -264,15 +265,17 @@ bool Mesh::loadOBJ(const std::string& filename, const Options& options)
 			// Read normal
 			float x, y, z;
 			int res = sscanf(c_line, "%f %f %f", &x, &y, &z);
-			if (res != 3) LOG_ERROR
+			if (res != 3) 
+				LOG_ERROR();
 			normalData.emplace_back(Vec3f{ x, y, z }.normalize());
 		}
 		else if (strcmp(lineHeader, "vt") == 0) {
 			// Read texture
 			float x, y;
 			int res = sscanf(c_line, "%f %f", &x, &y);
-			if (res != 2) LOG_ERROR
-				textureData.emplace_back(Vec2f{ x, y });
+			if (res != 2) 
+				LOG_ERROR();
+			textureData.emplace_back(Vec2f{ x, y });
 		}
 		else if (strcmp(lineHeader, "f") == 0) {
 			// Read face
@@ -596,7 +599,8 @@ bool AccelerationStructure::intersectAccelStruct(const Ray& ray, float& t0,
 	
 	// Check ancestors
 	if (left) {
-		if (!right) LOG_ERROR
+		if (!right) 
+			LOG_ERROR();
 		if (left->intersectAccelStruct(ray, tempT, tempTriPtr, tempUV) && tempT < t0) {
 			inter = true;
 			t0 = tempT;
@@ -634,7 +638,8 @@ float AccelerationStructure::calculateSAH(const int orientation, const std::vect
 	int triLeft = 0;
 	int triRight = 0;
 	if (orientation == 0) {
-		if (bounds[0].x > boundary && bounds[1].x < boundary) LOG_ERROR
+		if (bounds[0].x > boundary && bounds[1].x < boundary) 
+			LOG_ERROR();
 		for (const Triangle* tri : tris) {
 			if (tri->a.x <= boundary || tri->b.x <= boundary || tri->c.x <= boundary)
 				triLeft++;
@@ -644,7 +649,8 @@ float AccelerationStructure::calculateSAH(const int orientation, const std::vect
 		sah = triLeft * (boundary - bounds[0].x) + triRight * (bounds[1].x - boundary);
 	}
 	else if (orientation == 1) {
-		if (bounds[0].y > boundary && bounds[1].y < boundary) LOG_ERROR
+		if (bounds[0].y > boundary && bounds[1].y < boundary) 
+			LOG_ERROR();
 		for (const Triangle* tri : tris) {
 			if (tri->a.y <= boundary || tri->b.y <= boundary || tri->c.y <= boundary)
 				triLeft++;
@@ -654,7 +660,8 @@ float AccelerationStructure::calculateSAH(const int orientation, const std::vect
 		sah = triLeft * (boundary - bounds[0].y) + triRight * (bounds[1].y - boundary);
 	}
 	else if (orientation == 2) {
-		if (bounds[0].z > boundary && bounds[1].z < boundary) LOG_ERROR
+		if (bounds[0].z > boundary && bounds[1].z < boundary) 
+			LOG_ERROR();
 		for (const Triangle* tri : tris) {
 			if (tri->a.z <= boundary || tri->b.z <= boundary || tri->c.z <= boundary)
 				triLeft++;

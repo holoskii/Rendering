@@ -16,7 +16,6 @@ public:
 	Vec3f backgroundColor { 0.0f, 0.0f, 0.0f };
 	int acPenalty = 1;	// determines amount of acceleration structures
 	char names[6][64] = { { 0 } };	// skybox names
-	std::filesystem::path rootPath = "";
 	std::string imageName = "out";
 };
 

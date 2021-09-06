@@ -14,7 +14,7 @@
 
 int saveImage(Vec3f* frameBuffer, const Options& options)
 {
-    std::string path = (options.rootPath / (options.imageName + std::string(".bmp"))).string();
+    std::string path = options.imageName + std::string(".bmp");
     std::ofstream of(path, std::ios::out | std::ios::binary);
     if (!of.good()) {
         std::cout << "Could not open output file " << path << '\n';
@@ -57,20 +57,20 @@ int saveImage(Vec3f* frameBuffer, const Options& options)
         }
     }
 
-
     of.write(header, headerSize);
     of.write(data, arraySize);
     of.close();
 
-#ifdef _WIN32
-    wchar_t* wPath = new wchar_t[strlen(path.c_str()) + 1];
-    mbstowcs(wPath, path.c_str(), strlen(path.c_str()) + 1);
-    ShellExecute(NULL, L"open", wPath, NULL, NULL, SW_SHOWDEFAULT);
-    delete[] wPath;
-#elif __linux__
-    auto linuxCmd = "xdg-open " + path;
-    system(linuxCmd.c_str());
-#endif
+    std::string fullPath = (std::filesystem::current_path() / path).string();
+    #ifdef _WIN32
+        wchar_t* wPath = new wchar_t[strlen(fullPath.c_str()) + 1];
+        mbstowcs(wPath, fullPath.c_str(), strlen(fullPath.c_str()) + 1);
+        ShellExecute(NULL, L"open", wPath, NULL, NULL, SW_SHOWDEFAULT);
+        delete[] wPath;
+    #elif __linux__
+        auto linuxCmd = "xdg-open " + fullPath;
+        system(linuxCmd.c_str());
+    #endif
     delete[] data;
     return 0;
 }
@@ -81,7 +81,7 @@ unsigned char* loadBMP(const char* filename, int& width, int& height)
     FILE* f = fopen(filename, "rb");
     if (f == NULL) {
         std::cout << "Could not open .bmp file: " << filename << '\n';
-        LOG_ERROR
+        LOG_ERROR();
         return NULL;
     }
     unsigned char info[54];

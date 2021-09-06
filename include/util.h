@@ -10,11 +10,12 @@
 #include "geometry.h"
 #include "options.h"
 
-#define LOG_ERROR logError(__FILE__, __FUNCTION__, __LINE__);
+#define LOG_ERROR() logError(__FILE__, __FUNCTION__, __LINE__)
 
 inline void logError(const char* file, const char* func, int line)
 {
 	std::cout << "Error: " << file << ' ' << func << ' ' << line << '\n';
+	std::exit(-1);
 }
 
 inline float modulo(const float& f)
@@ -42,8 +43,9 @@ inline bool strToBool(const std::string_view& str)
 	bool result = 0;
 	std::stringstream ss{ std::string(str) };
 	ss >> result;
-	if (!ss.eof() && !ss.good()) LOG_ERROR
-		return result;
+	if (!ss.eof() && !ss.good())
+		LOG_ERROR();
+	return result;
 }
 
 inline int strToInt(const std::string_view& str)
@@ -51,7 +53,8 @@ inline int strToInt(const std::string_view& str)
 	int result = 0;
 	std::stringstream ss{ std::string(str) };
 	ss >> result;
-	if (!ss.eof() && !ss.good()) LOG_ERROR
+	if (!ss.eof() && !ss.good())
+		LOG_ERROR();
 	return result;
 }
 
@@ -60,13 +63,15 @@ inline float strToFloat(const std::string_view& str)
 	float result = 0;
 	std::stringstream ss{ std::string(str) };
 	ss >> result;
-	if (!ss.eof() && !ss.good()) LOG_ERROR
+	if (!ss.eof() && !ss.good())
+		LOG_ERROR();
 	return result;
 }
 
 inline Vec3f str3ToFloat(std::vector<std::string> vec)
 {
-	if (vec.size() != 3) LOG_ERROR
+	if (vec.size() != 3)
+		LOG_ERROR();
 	return Vec3f{ strToFloat(vec[0]), strToFloat(vec[1]), strToFloat(vec[2]) };
 }
 
