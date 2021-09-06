@@ -3,8 +3,8 @@ width=1024
 height=1024
 n_workers=8
 max_ray_depth=10
-image_name=output\phong_final
-skyboxes=input\skybox1\skybox_left.bmp,input\skybox1\skybox_front.bmp,input\skybox1\skybox_right.bmp,input\skybox1\skybox_back.bmp,input\skybox1\skybox_top.bmp,input\skybox1\skybox_bottom.bmp
+image_name=output/phong_final
+skyboxes=input/skybox1/skybox_left.bmp,input/skybox1/skybox_front.bmp,input/skybox1/skybox_right.bmp,input/skybox1/skybox_back.bmp,input/skybox1/skybox_top.bmp,input/skybox1/skybox_bottom.bmp
 #######################################################
 
 [light]

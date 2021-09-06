@@ -14,12 +14,14 @@
 
 int saveImage(Vec3f* frameBuffer, const Options& options)
 {
-    std::string path = options.rootPath + "\\" + options.imageName + std::string(".bmp");
+    std::string path = (options.rootPath / (options.imageName + std::string(".bmp"))).string();
     std::ofstream of(path, std::ios::out | std::ios::binary);
     if (!of.good()) {
         std::cout << "Could not open output file " << path << '\n';
         return -1;
     }
+    
+    std::cout << "Successfully wrote to output file " << path << '\n';
 
     const size_t headerSize = 54;
     char header[headerSize] = { 0 };
@@ -65,7 +67,10 @@ int saveImage(Vec3f* frameBuffer, const Options& options)
     mbstowcs(wPath, path.c_str(), strlen(path.c_str()) + 1);
     ShellExecute(NULL, L"open", wPath, NULL, NULL, SW_SHOWDEFAULT);
     delete[] wPath;
-#endif // _WIN32
+#elif __linux__
+    auto linuxCmd = "xdg-open " + path;
+    system(linuxCmd.c_str());
+#endif
     delete[] data;
     return 0;
 }

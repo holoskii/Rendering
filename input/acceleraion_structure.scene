@@ -21,6 +21,6 @@ size=2,2,2
 color=1,1,1
 rot=0,180,0
 material=diffuse
-name=input\objects\dragon.obj
+name=input/objects/dragon.obj
 
 [end]

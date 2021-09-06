@@ -3,7 +3,7 @@ width=3840
 height=1080
 ac_penalty=3
 background_color=0.52,0.8,0.92
-image_name=output\shotgun_final
+image_name=output/shotgun_final
 showNormals=0
 #######################################################
 
@@ -28,9 +28,9 @@ size=2,2,2
 color=1,1,1
 rot=0,100,0
 material=phong,0.4,0.1,0.7,10.0
-name=input\objects\shotgun.obj
-diffuse_map=input\objects\shotgun_diffuse.bmp
-normal_map=input\objects\shotgun_normal.bmp
-specular_map=input\objects\shotgun_specular.bmp
+name=input/objects/shotgun.obj
+diffuse_map=input/objects/shotgun_diffuse.bmp
+normal_map=input/objects/shotgun_normal.bmp
+specular_map=input/objects/shotgun_specular.bmp
 
 [end]

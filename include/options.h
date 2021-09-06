@@ -1,6 +1,7 @@
 // Class describing options, and namespace for global setting
 #pragma once
 
+#include <filesystem>
 #include <string>
 
 #include "geometry.h"
@@ -15,7 +16,7 @@ public:
 	Vec3f backgroundColor { 0.0f, 0.0f, 0.0f };
 	int acPenalty = 1;	// determines amount of acceleration structures
 	char names[6][64] = { { 0 } };	// skybox names
-	std::string rootPath = "";
+	std::filesystem::path rootPath = "";
 	std::string imageName = "out";
 };
 

@@ -4,7 +4,7 @@ height=1080
 n_workers=8
 max_ray_depth=10
 background_color=0.52,0.8,0.92
-image_name=output\simple_shapes
+image_name=output/simple_shapes
 #######################################################
 
 [light]
