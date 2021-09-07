@@ -355,6 +355,25 @@ void Scene::loadSkybox()
 	}
 }
 
+std::vector<tileInfo> Scene::getTiles()
+{
+	const size_t tileSize = 128;
+	std::vector<tileInfo> tileInfoVec;
+	for (int i = 0; i < options.width / tileSize + 1; i++) {
+		for (int j = 0; j < options.height / tileSize + 1; j++) {
+			tileInfo tile{ i * tileSize, (i + 1) * tileSize, j * tileSize, (j + 1) * tileSize };
+			if (tile.y1 >= options.height)
+				tile.y1 = options.height - 1;
+			if (tile.x1 >= options.width)
+				tile.x1 = options.width - 1;
+			if (tile.x1 <= tile.x0 || tile.y1 <= tile.y0)
+				continue;
+			tileInfoVec.push_back(tile);
+		}
+	}
+	return tileInfoVec;
+}
+
 Vec3f Scene::getSkybox(const Vec3f& dir) const
 {
 	if (!options::useSkybox) {
@@ -418,15 +437,24 @@ Vec3f Scene::getSkybox(const Vec3f& dir) const
 	return options.backgroundColor;
 }
 
-void Scene::renderWorker(Vec3f* frameBuffer, size_t x0, size_t x1, size_t y0, size_t y1)
+void Scene::renderWorker(Vec3f* frameBuffer, const tileInfo& tile)
 {
 	// Render pixels in tile from (x0, y0) to (x1, y1)
 	const float scale = tanf(camera.fov * 0.5f / 180.0f * (float)(M_PI));
 	const float imageAspectRatio = (options.width) / (float)options.height;
-	for (size_t y = y0; y < y1; y++) {
-		for (size_t x = x0; x < x1; x++) {
-			float xPix = (2 * (x + 0.5f) / (float)options.width - 1) * scale * imageAspectRatio;
-			float yPix = -(2 * (y + 0.5f) / (float)options.height - 1) * scale;
+	const float width = (float)options.width;
+	const float height = (float)options.height;
+	float xPix = 0, yPix = 0;
+
+	auto getPixels = [=](const float x, const float y, float& xPix, float& yPix)
+	{
+		xPix = (2 * (x + 0.5f) / width - 1) * scale * imageAspectRatio;
+		yPix = -(2 * (y + 0.5f) / height - 1) * scale;
+	};
+
+	for (size_t y = tile.y0; y < tile.y1; y++) {
+		for (size_t x = tile.x0; x < tile.x1; x++) {
+			getPixels((float)x + 0.5f, (float)y + 0.5f, xPix, yPix);
 			Ray ray = camera.getRay(xPix, yPix);
 			frameBuffer[x + y * options.width] = Render::castRay(ray, *this, 0);
 			finishedPixels++;
@@ -442,27 +470,10 @@ void Scene::launchWorkers(Vec3f* frameBuffer)
 	// For progress updates
 	std::chrono::time_point lastProgressOutput = std::chrono::high_resolution_clock::now();
 
-	// Fill tile vector
-	typedef struct {
-		size_t x0, x1, y0, y1;
-	} tileInfo;
-	const size_t tileSize = 128;
-	std::vector<tileInfo> tileInfoVec;	
-	for (int i = 0; i < options.width / tileSize + 1; i++) {
-		for (int j = 0; j < options.height / tileSize + 1; j++) {
-			tileInfo tile{ i * tileSize, (i + 1) * tileSize, j * tileSize, (j + 1) * tileSize };
-			if (tile.y1 >= options.height)
-				tile.y1 = options.height - 1;
-			if (tile.x1 >= options.width)
-				tile.x1 = options.width - 1;
-			if (tile.x1 <= tile.x0 || tile.y1 <= tile.y0)
-				continue;
-			tileInfoVec.push_back(tile);
-		}
-	}
-
+	std::vector<tileInfo> tileInfoVec = getTiles();
 	int tileIndex = 0;
 	std::vector<std::thread> threadPool;
+	runningWorkers = 0;
 	do {
 		// Avoid loop running too fast
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -480,7 +491,7 @@ void Scene::launchWorkers(Vec3f* frameBuffer)
 		while (tileIndex < tileInfoVec.size() && runningWorkers < options.nWorkers) {
 			tileInfo tile = tileInfoVec.at(tileIndex++);
 			runningWorkers++;
-			threadPool.emplace_back(std::thread(&Scene::renderWorker, this, frameBuffer, tile.x0, tile.x1, tile.y0, tile.y1));
+			threadPool.emplace_back(std::thread(&Scene::renderWorker, this, frameBuffer, tile));
 		}
 	} while (runningWorkers > 0);
 
@@ -488,6 +499,93 @@ void Scene::launchWorkers(Vec3f* frameBuffer)
 	for (auto& thread : threadPool) {
 		thread.join();
 	}
+}
+
+void Scene::SSAAworker(Vec3f* frameBuffer, bool* sobelBuffer, const tileInfo& tile)
+{
+	// Render pixels in tile from (x0, y0) to (x1, y1)
+	const float scale = tanf(camera.fov * 0.5f / 180.0f * (float)(M_PI));
+	const float imageAspectRatio = (options.width) / (float)options.height;
+	const float width = (float)options.width;
+	const float height = (float)options.height;
+	float xPix = 0, yPix = 0;
+
+	auto getPixels = [=](const float x, const float y, float& xPix, float& yPix)
+	{
+		xPix = (2 * (x + 0.5f) / width - 1) * scale * imageAspectRatio;
+		yPix = -(2 * (y + 0.5f) / height - 1) * scale;
+	};
+
+	for (size_t y = tile.y0; y < tile.y1; y++) {
+		for (size_t x = tile.x0; x < tile.x1; x++) {
+			if (sobelBuffer[y * options.width + x]) {
+				Vec3f color = { 0, 0, 0 };
+				getPixels((float)x + 0.25f, (float)y + 0.25f, xPix, yPix);
+				color += Render::castRay(camera.getRay(xPix, yPix), *this, 0);
+				getPixels((float)x + 0.25f, (float)y + 0.75f, xPix, yPix);
+				color += Render::castRay(camera.getRay(xPix, yPix), *this, 0);
+				getPixels((float)x + 0.75f, (float)y + 0.25f, xPix, yPix);
+				color += Render::castRay(camera.getRay(xPix, yPix), *this, 0);
+				getPixels((float)x + 0.75f, (float)y + 0.75f, xPix, yPix);
+				color += Render::castRay(camera.getRay(xPix, yPix), *this, 0);
+				frameBuffer[x + y * options.width] = color / 4;
+			}
+		}
+	}
+	runningWorkers--;
+}
+
+void Scene::launchSSAA(Vec3f* frameBuffer)
+{
+	Timer t1("MSAA");
+	bool* sobelBuffer = new bool[options.height * options.width];
+
+	float sobelOperator[3][3] =
+	{ { -1, 0, 1 },
+	  { -2, 0, 2 },
+	  { -1, 0, 1 } };
+
+	{
+		Timer t2("Sobel filter");
+		for (int i = 1; i < options.height - 1; i++) {
+			for (int j = 1; j < options.width - 1; j++) {
+				Vec3f x = { 0.0f }, y = { 0.0f };
+
+				for (int a = 0; a < 3; a++) {
+					for (int b = 0; b < 3; b++) {
+						x += frameBuffer[(i - 1 + a) * options.width + j - 1 + b] * sobelOperator[a][b];
+						y += frameBuffer[(i - 1 + a) * options.width + j - 1 + b] * sobelOperator[b][a];
+					}
+				}
+
+				float val = sqrtf(powf(x.length(), 2) + powf(y.length(), 2));
+				sobelBuffer[i * options.width + j] = val > 0.5f ? true : false;
+			}
+		}
+	}
+
+	std::vector<tileInfo> tileInfoVec = getTiles();
+	int tileIndex = 0;
+	std::vector<std::thread> threadPool;
+	runningWorkers = 0;
+	do {
+		// Avoid loop running too fast
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+		// Keep launching threads until we run out of tiles
+		while (tileIndex < tileInfoVec.size() && runningWorkers < options.nWorkers) {
+			tileInfo tile = tileInfoVec.at(tileIndex++);
+			runningWorkers++;
+			threadPool.emplace_back(std::thread(&Scene::SSAAworker, this, frameBuffer, sobelBuffer, tile));
+		}
+	} while (runningWorkers > 0);
+
+	// Check that no thread is running
+	for (auto& thread : threadPool) {
+		thread.join();
+	}
+
+	delete[] sobelBuffer;
 }
 
 void Scene::render()
@@ -498,6 +596,9 @@ void Scene::render()
 	
 	if (!options::showAC) {
 		launchWorkers(frameBuffer);
+
+		if (options::enableSSAA)
+			launchSSAA(frameBuffer);
 	}
 	else {
 		// To show AC we need to another routine

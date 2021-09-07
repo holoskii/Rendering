@@ -22,6 +22,11 @@ struct IntersectInfo
 	Vec2f uv{ -1,-1 };
 };
 
+typedef struct 
+{
+	size_t x0, x1, y0, y1;
+} tileInfo;
+
 // Some static functions
 class Render
 {
@@ -85,7 +90,11 @@ public:
 
 	void render();
 	void launchWorkers(Vec3f* frameBuffer);
-	void renderWorker(Vec3f* frameBuffer, size_t x0, size_t x1, size_t y0, size_t y1);
+	void renderWorker(Vec3f* frameBuffer, const tileInfo& tile);
+	void launchSSAA(Vec3f* frameBuffer);
+	void SSAAworker(Vec3f* frameBuffer, bool* sobelBuffer, const tileInfo& tile);
+
+	std::vector<tileInfo> getTiles();
 
 	int countAC(const Ray& ray);
 };

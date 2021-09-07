@@ -33,4 +33,5 @@ namespace options
 	inline bool useSkybox				= false;
 	inline bool useTextures				= true;
 	inline bool showNormals				= false;
+	inline bool enableSSAA				= true;
 }

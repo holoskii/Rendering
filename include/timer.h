@@ -28,7 +28,7 @@ public:
 		auto stopTime = std::chrono::high_resolution_clock::now();
 		long long duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count();
 		if (options::enableOutput) {
-			std::cout << name << " \t" << duration << " ms" << std::endl;
+			std::cout << std::setw(18) << std::left << name << duration << " ms" << std::endl;
 		}
 		return duration;
 	}
