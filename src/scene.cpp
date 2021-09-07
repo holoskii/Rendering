@@ -65,6 +65,10 @@ bool Scene::loadScene(const std::string& scenePath)
 		std::cout << "Loading scene " << scenePath << '\n';
 	}
 
+	const unsigned int processorCount = std::thread::hardware_concurrency();
+	if (processorCount != 0)
+		options.nWorkers = processorCount;
+
     enum class BlockType { None, Options, Light, Object };
     std::map<std::string, BlockType> blockMap;
     blockMap["[options]"] = BlockType::Options;
