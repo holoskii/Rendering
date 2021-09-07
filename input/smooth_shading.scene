@@ -2,8 +2,6 @@
 width=1000
 height=1000
 fov=60
-n_workers=8
-max_depth=4
 image_name="files/smooth_shading.ppm"
 
 [light]

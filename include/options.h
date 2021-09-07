@@ -11,7 +11,7 @@ class Options
 public:
 	size_t width = 800, height = 600;		// screen dimensions in pixels
 	float bias = 0.0001f;	// bias is used to avoid self-intersections
-	int maxRayDepth = 5;
+	int maxRayDepth = 10;
 	int nWorkers = 32;
 	Vec3f backgroundColor { 0.0f, 0.0f, 0.0f };
 	int acPenalty = 1;	// determines amount of acceleration structures

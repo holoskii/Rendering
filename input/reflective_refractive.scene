@@ -1,8 +1,6 @@
 [options]
 width=1920
 height=1080
-n_workers=8
-max_ray_depth=10
 rotation=-10,0,0
 image_name=output/reflective_refractive
 skyboxes=input/skybox1/skybox_left.bmp,input/skybox1/skybox_front.bmp,input/skybox1/skybox_right.bmp,input/skybox1/skybox_back.bmp,input/skybox1/skybox_top.bmp,input/skybox1/skybox_bottom.bmp
