@@ -21,7 +21,14 @@ In order to render something, we need information about scene. Those are stored 
 
 ## Features
 ### Multithreading
-Ray tracing process for each pixel is a task that can be easily paralleled, so the program can use a custom amount of C++ threads to boost performance.
+Ray tracing process for each pixel is a task that can be easily paralleled, so the program splits a scene into a set of 128x128 tiles and then renders them with a number of threads that equals to system thread count.
+![](output/tiling_example.bmp.bmp)
+  
+### Anti-Aliasing
+After scene was rendered, anti-aliasing may be applied. The process consists of 2 steps: running Sobel filter on rendered image to detect edges. And then launch tile renderer that will rewrite image pixel with color of 4 new rays launched for that pixel.
+| Sobel filter result | 8x zoomed image comparison|
+|:----------------:|:----------------:|
+|![](output/sobel.bmp)|![](output/ssaa_comparison.png)|
   
 ### Basic shapes
 The simplest scene that can be rendered is a scene consisting of base shapes, like Sphere and Plane, and Point or Distant light sources. Here is an example of such a scene: 
