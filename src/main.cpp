@@ -11,5 +11,6 @@ int main(int argc, char** argv)
 	else {
 		scenePath = std::string("input/simple_shapes.scene");
 	}
+
 	Scene(scenePath).render();
 }

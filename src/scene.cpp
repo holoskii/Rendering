@@ -6,6 +6,7 @@
 #include <map>
 #include <fstream>
 #include <cstring>
+#include <random>
 
 #include "timer.h"
 #include "util.h"
@@ -183,7 +184,7 @@ bool Scene::loadScene(const std::string& scenePath)
 				if (res.size() < 6) 
 					LOG_ERROR();
 				for (int i = 0; i < 6; i++) {
-					strncpy(options.names[i], res[i].c_str(), 64);
+					strncpy(options.skyboxNames[i], res[i].c_str(), 64);
 				}
 				options::useSkybox = 1;
 			}
@@ -335,7 +336,7 @@ void Scene::loadSkybox()
 		unsigned char* u_skyboxes[6];
 		int width, height;
 		for (int i = 0; i < 6; i++) {
-			u_skyboxes[i] = loadBMP(options.names[i], width, height);
+			u_skyboxes[i] = loadBMP(options.skyboxNames[i], width, height);
 		}
 		skyboxHeight = height;
 		skyboxWidth = width;
@@ -417,7 +418,7 @@ Vec3f Scene::getSkybox(const Vec3f& dir) const
 	return options.backgroundColor;
 }
 
-void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1, size_t x0, size_t x1)
+void Scene::renderWorker(Vec3f* frameBuffer, size_t x0, size_t x1, size_t y0, size_t y1)
 {
 	// Render pixels in tile from (x0, y0) to (x1, y1)
 	const float scale = tanf(camera.fov * 0.5f / 180.0f * (float)(M_PI));
@@ -431,44 +432,75 @@ void Scene::renderWorker(Vec3f* frameBuffer, size_t y0, size_t y1, size_t x0, si
 			finishedPixels++;
 		}
 	}
-	finishedWorkers++;
+	runningWorkers--;
 }
 
-int Scene::launchWorkers(Vec3f* frameBuffer)
+void Scene::launchWorkers(Vec3f* frameBuffer)
 {
 	Timer t("Render scene");
 	
-	// Create threads with equal load
-	std::vector<std::thread> threadPool;
-	for (size_t i = 0; i < options.nWorkers; i++) {
-		size_t y0 = options.height / options.nWorkers * i;
-		size_t y1 = options.height / options.nWorkers * (i + 1);
-		if (i + 1 == options.nWorkers) y1 = options.height;
-		threadPool.push_back(std::thread(&Scene::renderWorker, this, frameBuffer, y0, y1, 0, options.width));
-	}
+	// For progress updates
+	std::chrono::time_point lastProgressOutput = std::chrono::high_resolution_clock::now();
 
-	if (options::outputProgress) {
-		// Until all workers finish we will print progress
-		while (finishedWorkers != options.nWorkers) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-			const float progressCoef = 100.0f / (options.width * options.height);
-			std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels << "%\n";
+	// Fill tile vector
+	typedef struct {
+		size_t x0, x1, y0, y1;
+	} tileInfo;
+	const size_t tileSize = 128;
+	std::vector<tileInfo> tileInfoVec;	
+	for (int i = 0; i < options.width / tileSize + 1; i++) {
+		for (int j = 0; j < options.height / tileSize + 1; j++) {
+			tileInfo tile{ i * tileSize, (i + 1) * tileSize, j * tileSize, (j + 1) * tileSize };
+			if (tile.y1 >= options.height)
+				tile.y1 = options.height - 1;
+			if (tile.x1 >= options.width)
+				tile.x1 = options.width - 1;
+			if (tile.x1 <= tile.x0 || tile.y1 <= tile.y0)
+				continue;
+			tileInfoVec.push_back(tile);
 		}
 	}
 
-	for (auto& thread : threadPool)
-		thread.join();
+	int tileIndex = 0;
+	std::vector<std::thread> threadPool;
+	do {
+		// Avoid loop running too fast
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-	return 0;
+		// Print progress each second
+		if (options::outputProgress) {
+			if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - lastProgressOutput).count() > 1000) {
+				const float progressCoef = 100.0f / (options.width * options.height);
+				std::cout << std::fixed << std::setw(2) << std::setprecision(0) << progressCoef * finishedPixels << "%\n";
+				lastProgressOutput = std::chrono::high_resolution_clock::now();
+			}
+		}
+
+		// Keep launching threads until we run out of tiles
+		while (tileIndex < tileInfoVec.size() && runningWorkers < options.nWorkers) {
+			tileInfo tile = tileInfoVec.at(tileIndex++);
+			runningWorkers++;
+			threadPool.emplace_back(std::thread(&Scene::renderWorker, this, frameBuffer, tile.x0, tile.x1, tile.y0, tile.y1));
+		}
+	} while (runningWorkers > 0);
+
+	// Check that no thread is running
+	for (auto& thread : threadPool) {
+		thread.join();
+	}
 }
 
-long long Scene::render()
+void Scene::render()
 {
-	if (!sceneLoadSuccess) return -1;
+	if (!sceneLoadSuccess) return;
 	Timer t("Total time");
 	Vec3f* frameBuffer = new Vec3f[options.height * options.width];
-	// To show AC we need to another routine
-	if (options::showAC) {
+	
+	if (!options::showAC) {
+		launchWorkers(frameBuffer);
+	}
+	else {
+		// To show AC we need to another routine
 		const Vec3f orig = { 0, 0, 0 };
 		const float scale = tanf(camera.fov * 0.5f / 180.0f * (float)(M_PI));
 		float imageAspectRatio = (options.width) / (float)options.height;
@@ -496,9 +528,7 @@ long long Scene::render()
 		}
 		delete[] acBuffer;
 	}
-	else {
-		launchWorkers(frameBuffer);
-	}
+	
 
 	if (options::imageOutput) {
 		saveImage(frameBuffer, options);
@@ -519,7 +549,6 @@ long long Scene::render()
 	if (options::enableOutput) {
 		std::cout << '\n';
 	}
-	return t.stop();
 }
 
 int Scene::countAC(const Ray& ray)
