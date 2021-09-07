@@ -78,7 +78,7 @@ Mesh consists of polygons (triangles), and if we will draw them as they are we w
 The plain object is not very interesting and useful, so we can use texture maps to fix it. A texture map (sometimes called diffuse map) is an image storing information about objects' color. We can get them from texture coordinates, which are associated with each triangle. Also, those coordinates are normalized (from 0 to 1), therefore texture itself can have any size. The bigger the size - the better the quality.
 | Texture file | Render without texture | Render with texture |
 |:----------------:|:----------------:|:----------------:|
-|![](input/objects/cow_diffuse.jpg)|![](output/cow_undextured.jpg)|![](output/cow_textured.jpg)| 
+|![](input/objects/cow_diffuse.bmp)|![](output/cow_undextured.jpg)|![](output/cow_textured.jpg)| 
 
 ## Normal maps 
 Another tecnique similar to texture map is normal map. It can add to object more small details, without increasing the complexity of geometry. To use the tangent normal map we have to calculate tangent and bitangent for each triangle, and each time we'll need a normal we will transform the vector from the map into world space. In each pixel of such a map 3d vector is encoded, which shows direction of normal in tangent space.   
@@ -93,7 +93,7 @@ We can add one more map to the object, which is specular map. This map is used f
 All 3 maps of the following model:
 | Texture (diffuse) map | Normal map | Specular map |
 |:----------------:|:----------------:|:----------------:|
-|![](input/objects/shotgun_diffuse.jpg)|![](input/objects/shotgun_normal.jpg)|![](input/objects/shotgun_specular.jpg)| 
+|![](input/objects/shotgun_diffuse.bmp)|![](input/objects/shotgun_normal.bmp)|![](input/objects/shotgun_specular.bmp)| 
   
 And with those 3 image we managed to enhance view of our model without significant performance loss.
 ![](output/shotgun_basic.jpg)
